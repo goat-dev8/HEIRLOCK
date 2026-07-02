@@ -1,0 +1,90 @@
+# ── Secrets — never commit ──────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+id_rsa*
+id_ed25519*
+*.secret
+secrets/
+credentials.json
+**/service-account*.json
+DEPLOYER_PRIVATE_KEY*
+SODEX_*_PRIVATE_KEY*
+
+# Deploy / cloud tokens (local only)
+.render/
+.github-token
+.gh-token
+scripts/.render-deploy-state.json
+
+# ── Internal research / docs (public README only) ────────────────────
+*.md
+!README.md
+
+# ── Dependencies ────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+.yarn/
+.npm/
+.turbo/
+
+# ── Build outputs ───────────────────────────────────────────────────
+dist/
+build/
+out/
+.next/
+.vite/
+coverage/
+*.tsbuildinfo
+*.map
+
+# ── Local databases ─────────────────────────────────────────────────
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+
+# ── Logs / caches ───────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.cache/
+.parcel-cache/
+.tmp/
+tmp/
+.temp/
+.eslintcache
+
+# ── IDE / OS ────────────────────────────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Foundry / contracts artifacts ───────────────────────────────────
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/forge-std/.git
+
+# ── Misc local / agent ──────────────────────────────────────────────
+.cursor/
+.agents/
+agent-transcripts/
+*.local
+.vercel/
+.wrangler/
