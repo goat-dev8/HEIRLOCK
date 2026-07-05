@@ -1,0 +1,33 @@
+{
+  "network": "valuechain-testnet",
+  "chainId": 138565,
+  "rpc": "https://testnet-v2.valuechain.xyz",
+  "explorer": "https://test-scan.valuechain.xyz",
+  "deployedAt": "2026-07-11T02:15:11Z",
+  "deployer": "0xBDfCeE82Bd42FEfA58ee850B3709636a8B6b0034",
+  "initialCapUsd": 1,
+  "funding": {
+    "workflow": "vUSDC → buy WSOSO_vUSDC → POST /accounts/transfers EVM_WITHDRAW(type=2,toAccountID=999) → forward native SOSO to deployer",
+    "sodexWallet": "0xf76e6B0920e9332fF4410f6dD53F01722AbC71a3",
+    "wsosoCoinId": 4,
+    "notes": [
+      "No public UI for testnet SOSO withdraw — REST EVM_WITHDRAW only",
+      "SoDEX decimal strings must not pad trailing zeros (use 0.45 not 0.4500)",
+      "EVM_WITHDRAW credits the connected SoDEX master wallet; forward on-chain to DEPLOYER if different"
+    ]
+  },
+  "contracts": {
+    "WealthPolicy": "0x3C1f4718a45e80c6D4E8772909712c1599D8D51D",
+    "ActionLog": "0xD7464d9182ffe02d7255Cf3e319145755eE8517d",
+    "ModeController": "0x16F3B1b67461B20F889998A059526E2acfcdf060",
+    "AttestationRegistry": "0xfdC9A9F19441f10729769393CBBD6d870802Ace9",
+    "ContinuityNFT": "0x273F1874E1acAe0aa74F04DaeAb718E1CD8d287B",
+    "FeeCollector": "0xBd9dB4C0F048527358a8A6050fA3b5d31a49D067"
+  },
+  "verification": {
+    "mode": 0,
+    "maxNotionalUsd": 1,
+    "controllerMatchesModeController": true,
+    "continuityName": "HEIRLOCK Continuity"
+  }
+}
