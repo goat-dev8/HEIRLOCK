@@ -1,0 +1,36 @@
+{
+  "network": "valuechain-mainnet",
+  "chainId": 286623,
+  "rpc": "https://mainnet.valuechain.xyz",
+  "explorer": "https://scan.valuechain.xyz",
+  "deployedAt": "2026-07-11T01:43:46Z",
+  "deployer": "0xBDfCeE82Bd42FEfA58ee850B3709636a8B6b0034",
+  "initialCapUsd": 1,
+  "gasUsedEstimate": 3117102,
+  "gasCostNativeApprox": "0.000024936837819714 SOSO",
+  "contracts": {
+    "WealthPolicy": "0xB4483128Bf95aa63621cB9EcA7f5d22a0d546b6C",
+    "ActionLog": "0x3db8750EE3a397b5A8A4e1842Bfb69f511342C6b",
+    "ModeController": "0xdBAE8db588e39Ba5EBe2C749Ba06Daf24F6F3450",
+    "AttestationRegistry": "0x3C1f4718a45e80c6D4E8772909712c1599D8D51D",
+    "ContinuityNFT": "0xD7464d9182ffe02d7255Cf3e319145755eE8517d",
+    "FeeCollector": "0x16F3B1b67461B20F889998A059526E2acfcdf060"
+  },
+  "verification": {
+    "mode": 0,
+    "maxNotionalUsd": 1,
+    "controllerMatchesModeController": true,
+    "continuityName": "HEIRLOCK Continuity"
+  },
+  "transactions": [
+    "0x28780a9b087e42fbd6ca6fda9090e6062609e66390b817142176207051a8c172",
+    "0xe2e8b3b5c165e40aaba8e6c8c724929f121eaa4485c122284592190d458df3cb",
+    "0xfbbef65a01cf61a6b2823004b73a1b49445fb79764879d40fbedff8f922f7274",
+    "0x79d3cf8328cf66531635f8aa1d7c1f2ac6ff539d28d67869fae07c805a9538a0"
+  ],
+  "notes": [
+    "Deployed to ValueChain MAINNET because deployer testnet balance was 0 SOSO",
+    "Testnet deploy requires native SOSO from https://testnet.sodex.com/faucet (whitelist wallet)",
+    "WealthPolicy.controller set to ModeController"
+  ]
+}
