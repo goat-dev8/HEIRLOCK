@@ -1,0 +1,30 @@
+{
+  "name": "@heirlock/ai-provider",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "test:e2e": "tsx src/e2e-nvidia.ts"
+  },
+  "dependencies": {
+    "@heirlock/config": "workspace:*",
+    "dotenv": "^16.4.7",
+    "openai": "^4.89.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
