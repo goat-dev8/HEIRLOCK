@@ -5,13 +5,15 @@ services:
     plan: free
     region: oregon
     rootDir: apps/api
-    buildCommand: cd ../.. && corepack enable && pnpm install --frozen-lockfile && pnpm --filter @heirlock/config build && pnpm --filter @heirlock/ai-provider build && pnpm --filter @heirlock/sodex-signing build && pnpm --filter @heirlock/api exec prisma generate && pnpm --filter @heirlock/api build
+    buildCommand: cd ../.. && npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter @heirlock/config build && pnpm --filter @heirlock/ai-provider build && pnpm --filter @heirlock/sodex-signing build && pnpm --filter @heirlock/api exec prisma generate && pnpm --filter @heirlock/api build
     startCommand: pnpm exec prisma migrate deploy && pnpm start
     healthCheckPath: /api/health/live
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "20.19.0"
       - key: PORT
         value: "10000"
       - key: HOST
@@ -38,8 +40,6 @@ services:
         value: nvidia
       - key: AI_FALLBACK_PROVIDERS
         value: cerebras,sambanova,groq
-      - key: NODE_VERSION
-        value: "20"
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_DATABASE_URL

@@ -105,6 +105,7 @@ function buildEnvVars(serviceUrl) {
 
   const overrides = {
     NODE_ENV: "production",
+    NODE_VERSION: "20.19.0",
     PORT: "10000",
     HOST: "0.0.0.0",
     LOG_LEVEL: "info",
@@ -178,7 +179,7 @@ const services = (Array.isArray(servicesRaw) ? servicesRaw : []).map((s) => s.se
 let service = services.find((s) => s.name === SERVICE_NAME);
 
 const buildCommand =
-  "cd ../.. && corepack enable && pnpm install --frozen-lockfile && pnpm --filter @heirlock/config build && pnpm --filter @heirlock/ai-provider build && pnpm --filter @heirlock/sodex-signing build && pnpm --filter @heirlock/api exec prisma generate && pnpm --filter @heirlock/api build";
+  "cd ../.. && npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter @heirlock/config build && pnpm --filter @heirlock/ai-provider build && pnpm --filter @heirlock/sodex-signing build && pnpm --filter @heirlock/api exec prisma generate && pnpm --filter @heirlock/api build";
 const startCommand = "pnpm exec prisma migrate deploy && pnpm start";
 
 if (!service) {
@@ -193,12 +194,15 @@ if (!service) {
     rootDir: "apps/api",
     serviceDetails: {
       runtime: "node",
+      env: "node",
       plan: "free",
       region: "oregon",
-      buildCommand,
-      startCommand,
       healthCheckPath: "/api/health/live",
       numInstances: 1,
+      envSpecificDetails: {
+        buildCommand,
+        startCommand,
+      },
     },
     envVars: buildEnvVars(null),
   });
@@ -215,10 +219,27 @@ await api("PUT", `/services/${service.id}/env-vars`, envVars);
 
 // Trigger deploy
 console.log("Triggering deploy...");
-const deploy = await api("POST", `/services/${service.id}/deploys`, {
-  clearCache: "clear",
-});
-const deployId = deploy.id || deploy.deploy?.id;
+let deployId = null;
+try {
+  const deploy = await api("POST", `/services/${service.id}/deploys`, {
+    clearCache: "clear",
+  });
+  deployId = deploy?.id || deploy?.deploy?.id || null;
+} catch (e) {
+  console.warn("Deploy trigger warning:", e.message);
+}
+
+if (!deployId) {
+  const list = await api("GET", `/services/${service.id}/deploys?limit=1`);
+  const items = (Array.isArray(list) ? list : []).map((d) => d.deploy || d);
+  deployId = items[0]?.id || null;
+}
+
+const resolvedUrl =
+  service.serviceDetails?.url ||
+  (typeof serviceUrl === "string" && serviceUrl.startsWith("http")
+    ? serviceUrl
+    : `https://${SERVICE_NAME}.onrender.com`);
 
 const statePath = resolve(ROOT, "scripts/.render-deploy-state.json");
 writeFileSync(
@@ -228,7 +249,7 @@ writeFileSync(
       serviceId: service.id,
       serviceName: SERVICE_NAME,
       deployId,
-      url: serviceUrl.startsWith("http") ? serviceUrl : `https://${serviceUrl}`,
+      url: resolvedUrl,
       repo: REPO,
       ownerId,
       updatedAt: new Date().toISOString(),
@@ -244,7 +265,7 @@ console.log(
       ok: true,
       serviceId: service.id,
       deployId,
-      url: serviceUrl.startsWith("http") ? serviceUrl : `https://${serviceUrl}`,
+      url: resolvedUrl,
       envVarCount: envVars.length,
     },
     null,
