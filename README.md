@@ -16,6 +16,7 @@ AI Finance OS / Family Office backend for the SoSoValue Buildathon.
 | Path | Package |
 |---|---|
 | `apps/api` | Fastify API |
+| `frontend` | React / TanStack Start web client (Vercel) |
 | `packages/config` | Shared env + runtime config |
 | `packages/sodex-signing` | EIP-712 / transferAsset signing |
 | `packages/ai-provider` | NVIDIA + fallbacks |
@@ -37,21 +38,33 @@ pnpm --filter @heirlock/api dev
 
 Health: `GET /api/health/live`
 
-## Production (Render)
+## Production (Render API + Vercel frontend)
 
+### API — Render
 Blueprint: [`render.yaml`](./render.yaml)
 
 - **Service:** `heirlock-api` (Node web service, free plan)
-- **Build:** monorepo install + package builds + Prisma generate + API build
-- **Start:** `prisma migrate deploy` then `pnpm start`
+- **URL:** https://heirlock-api.onrender.com
 - **Health check:** `/api/health/live`
-- Secrets are injected via Render env vars — not committed to git
+- Secrets via Render env vars — never committed
 
-## Safety
+### Web — Vercel
+1. Import this GitHub repo in Vercel
+2. Set **Root Directory** to `frontend`
+3. Framework preset: **TanStack Start** (see `frontend/vercel.json`)
+4. Add env vars from `frontend/.env.example` (at minimum `VITE_API_URL=https://heirlock-api.onrender.com`)
+5. Deploy
 
-- Do not commit `.env`, private keys, or deployment tokens
-- Do not treat local SoDEX keys as production trading identity
-- Frontend is out of scope until backend DoD is complete
+Nitro is pinned to the `vercel` preset in `frontend/vite.config.ts`.  
+API CORS/SIWE already allow `*.vercel.app` and localhost so preview + production FE can sign in without inventing domains.
+
+Local FE:
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
 
 ## License
 

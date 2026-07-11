@@ -48,8 +48,12 @@ export async function buildApp(env: Env = loadEnv()) {
     .map((s) => s.trim())
     .filter(Boolean);
 
+  const { isAllowedCorsOrigin } = await import("./lib/cors-siwe.js");
+
   await app.register(cors, {
-    origin: origins.length ? origins : true,
+    origin: (origin, cb) => {
+      cb(null, isAllowedCorsOrigin(origin, origins));
+    },
     credentials: true,
   });
 

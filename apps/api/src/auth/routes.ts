@@ -7,6 +7,11 @@ import { issueAuthNonce, consumeAuthNonce } from "../redis.js";
 import { signSession } from "./jwt.js";
 import { createRequireWallet } from "./requireWallet.js";
 import { prisma } from "../db.js";
+import {
+  isAllowedSiweDomain,
+  parseOriginList,
+  resolveSiweFromOrigin,
+} from "../lib/cors-siwe.js";
 
 const nonceBody = z.object({
   address: z.string().refine((a) => isAddress(a), "Invalid address"),
@@ -19,6 +24,7 @@ const verifyBody = z.object({
 
 export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
   const requireWallet = createRequireWallet(ctx.env);
+  const corsAllowlist = parseOriginList(ctx.env.CORS_ALLOWED_ORIGINS);
 
   app.post("/api/auth/nonce", async (req, reply) => {
     const parsed = nonceBody.safeParse(req.body);
@@ -27,11 +33,19 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     }
     const address = getAddress(parsed.data.address);
     const nonce = await issueAuthNonce(address);
+    const originHeader =
+      typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+    const siwe = resolveSiweFromOrigin({
+      originHeader,
+      configuredDomain: ctx.env.SIWE_DOMAIN,
+      configuredUri: ctx.env.SIWE_URI,
+      corsAllowlist,
+    });
     return {
       address,
       nonce,
-      domain: ctx.env.SIWE_DOMAIN,
-      uri: ctx.env.SIWE_URI,
+      domain: siwe.domain,
+      uri: siwe.uri,
       chainId: ctx.env.VALUECHAIN_MAINNET_CHAIN_ID,
       statement: "Sign in to HEIRLOCK",
     };
@@ -50,7 +64,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       return reply.code(400).send({ error: "Invalid SIWE message" });
     }
 
-    if (siwe.domain !== ctx.env.SIWE_DOMAIN) {
+    if (!isAllowedSiweDomain(siwe.domain, ctx.env.SIWE_DOMAIN, corsAllowlist)) {
       return reply.code(401).send({ error: "SIWE domain mismatch" });
     }
 
@@ -61,7 +75,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
 
     const result = await siwe.verify({
       signature: parsed.data.signature,
-      domain: ctx.env.SIWE_DOMAIN,
+      domain: siwe.domain,
       nonce: siwe.nonce,
     });
 
