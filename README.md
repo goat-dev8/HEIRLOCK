@@ -49,21 +49,14 @@ Blueprint: [`render.yaml`](./render.yaml)
 - Secrets via Render env vars — never committed
 
 ### Web — Vercel
-1. Import this GitHub repo in Vercel
-2. Set **Root Directory** to `frontend`
-3. Framework preset: **TanStack Start** (see `frontend/vercel.json`)
-4. Add env vars from `frontend/.env.example` (at minimum `VITE_API_URL=https://heirlock-api.onrender.com`)
-5. Deploy
+- **Live:** https://heirlock-os.vercel.app (also https://heirlock-beta.vercel.app)
+- Project: `heirlock` · deploys from `frontend/`
+- Env: all `VITE_*` keys from `frontend/.env` (synced via `node scripts/deploy-vercel.mjs`)
+- Framework: TanStack Start + Nitro `vercel` preset
 
-Nitro is pinned to the `vercel` preset in `frontend/vite.config.ts`.  
-API CORS/SIWE already allow `*.vercel.app` and localhost so preview + production FE can sign in without inventing domains.
-
-Local FE:
+Redeploy:
 ```bash
-cd frontend
-cp .env.example .env
-npm install
-npm run dev
+node scripts/deploy-vercel.mjs
 ```
 
 ## License
