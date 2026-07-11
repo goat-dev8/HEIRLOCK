@@ -3,6 +3,12 @@
 .env.*
 !.env.example
 !.env.production.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.production.example
+.dev.vars
+**/.dev.vars
 *.pem
 *.key
 *.p12
@@ -23,6 +29,11 @@ SODEX_*_PRIVATE_KEY*
 .gh-token
 scripts/.render-deploy-state.json
 
+# Downloaded archives / local dumps
+*.zip
+*.7z
+*.rar
+
 # ── Internal research / docs (public README only) ────────────────────
 *.md
 !README.md
@@ -38,8 +49,13 @@ node_modules/
 dist/
 build/
 out/
+.output/
 .next/
 .vite/
+.vinxi/
+.tanstack/
+.nitro/
+.wrangler/
 coverage/
 *.tsbuildinfo
 *.map
@@ -87,4 +103,3 @@ contracts/lib/forge-std/.git
 agent-transcripts/
 *.local
 .vercel/
-.wrangler/
