@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     rootDir: apps/api
-    buildCommand: cd ../.. && npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter @heirlock/config build && pnpm --filter @heirlock/ai-provider build && pnpm --filter @heirlock/sodex-signing build && pnpm --filter @heirlock/api exec prisma generate && pnpm --filter @heirlock/api build
+    buildCommand: cd ../.. && npm install -g pnpm@9.15.0 && pnpm install --frozen-lockfile --prod=false && pnpm --filter @heirlock/config build && pnpm --filter @heirlock/ai-provider build && pnpm --filter @heirlock/sodex-signing build && pnpm --filter @heirlock/api exec prisma generate && pnpm --filter @heirlock/api build
     startCommand: pnpm exec prisma migrate deploy && pnpm start
     healthCheckPath: /api/health/live
     autoDeploy: true
