@@ -100,12 +100,12 @@ try {
   console.log(JSON.stringify({ step: "project", status: "created", id: project.id, name: project.name }));
 }
 
-// Ensure root directory + framework
+// CLI deploys from frontend/ — clear remote rootDirectory so path isn't doubled.
 await api(`/v9/projects/${project.id}${teamQs}`, {
   method: "PATCH",
   body: {
     framework: "tanstack-start",
-    rootDirectory: "frontend",
+    rootDirectory: null,
     buildCommand: "npm run build",
     installCommand: "npm install",
   },
@@ -133,36 +133,27 @@ for (const [key, value] of Object.entries(feEnv)) {
   console.log(JSON.stringify({ step: "env", key, action: prev ? "updated" : "created" }));
 }
 
-// Prefer CLI deploy for correct Git-linked builds
-const vercelBin = resolve(FRONTEND, "node_modules", "vercel", "dist", "vc.js");
 const hasLocalVercel = existsSync(resolve(FRONTEND, "node_modules", "vercel"));
 if (!hasLocalVercel) {
   execSync("npm install --no-save vercel@latest", { cwd: FRONTEND, stdio: "inherit" });
 }
 
-// Link project locally (non-interactive)
+const orgId = project.accountId || teamId || user?.user?.id;
 const vercelDir = resolve(FRONTEND, ".vercel");
 mkdirSync(vercelDir, { recursive: true });
 writeFileSync(
   resolve(vercelDir, "project.json"),
-  JSON.stringify(
-    {
-      projectId: project.id,
-      orgId: project.accountId || teamId || user?.user?.id,
-    },
-    null,
-    2,
-  ),
+  JSON.stringify({ projectId: project.id, orgId }, null, 2),
 );
 
 const deployEnv = {
   ...process.env,
   VERCEL_TOKEN: token,
-  VERCEL_ORG_ID: project.accountId || teamId || user?.user?.id,
+  VERCEL_ORG_ID: orgId,
   VERCEL_PROJECT_ID: project.id,
 };
 
-console.log(JSON.stringify({ step: "deploy", mode: "production" }));
+console.log(JSON.stringify({ step: "deploy", mode: "production", cwd: FRONTEND }));
 execSync("npx vercel deploy --prod --yes --force", {
   cwd: FRONTEND,
   stdio: "inherit",
