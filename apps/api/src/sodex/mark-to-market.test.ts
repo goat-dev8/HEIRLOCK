@@ -33,6 +33,24 @@ describe("mark-to-market", () => {
     assert.equal(marked.balances[1].usdValue, 20);
   });
 
+  it("unwraps SoDEX nested data.balances envelope", () => {
+    const prices = buildSpotPriceMap([{ symbol: "WSOSO_vUSDC", lastPx: "0.5" }]);
+    const marked = enrichBalancesWithUsd(
+      {
+        code: 0,
+        data: {
+          balances: [
+            { coin: "vUSDC", total: "5.96", locked: "0" },
+            { coin: "WSOSO", total: "1.33", locked: "0" },
+          ],
+        },
+      },
+      prices,
+    );
+    assert.equal(marked.balances.length, 2);
+    assert.ok(marked.totals.usd != null && marked.totals.usd > 6);
+  });
+
   it("merges symbols with ticker lastPx", () => {
     const rows = mergeSymbolsWithTickers(
       [{ id: 1, name: "HYPE_vUSDC", symbol: "HYPE_vUSDC" }],

@@ -26,7 +26,8 @@ function unwrapArray(v: unknown): unknown[] {
   }
   if (r.data && typeof r.data === "object") {
     const nested = asRecord(r.data);
-    for (const k of ["list", "items", "result", "rows", "symbols", "tickers"]) {
+    // SoDEX balances: { code, data: { balances: [...] } } — data is an object, not an array
+    for (const k of ["balances", "list", "items", "result", "rows", "symbols", "tickers"]) {
       if (Array.isArray(nested[k])) return nested[k] as unknown[];
     }
   }
@@ -93,9 +94,16 @@ export function enrichBalancesWithUsd(balancesRaw: unknown, prices: PriceMap) {
   const balances = rows.map((row) => {
     const r = asRecord(row);
     const asset = String(r.coin ?? r.asset ?? r.symbol ?? r.coinName ?? "UNKNOWN");
-    const free = Number(r.available ?? r.free ?? r.avail ?? 0);
     const locked = Number(r.locked ?? r.freeze ?? r.frozen ?? 0);
-    const total = Number(r.total ?? r.balance ?? free + locked);
+    const totalRaw = r.total ?? r.balance;
+    const freeRaw = r.available ?? r.free ?? r.avail;
+    const free =
+      freeRaw != null
+        ? Number(freeRaw)
+        : totalRaw != null
+          ? Number(totalRaw) - locked
+          : 0;
+    const total = totalRaw != null ? Number(totalRaw) : free + locked;
     const price = usdPriceForAsset(asset, prices);
     const usdValue = price != null && Number.isFinite(total) ? total * price : undefined;
     if (usdValue != null) {

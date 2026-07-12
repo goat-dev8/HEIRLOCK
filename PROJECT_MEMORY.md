@@ -49,9 +49,10 @@ AI Family Office / Finance OS on SoSoValue. Non-custodial. Per-user SoDEX relay 
 
 ## Known gaps / honesty rules
 
+- Portfolio balances unwrap SoDEX `{ data: { balances: [...] } }` — never treat empty unwrap as “no funds” without checking envelope
 - No fabricated PnL or USD when tickers missing → show Unavailable / note
 - SSI AUM often null from official snapshot
-- Official SSI Base contract addresses still pending
+- Official SSI Base contract addresses (router / staking / voting) stay null until verified on BaseScan — UI deep-links to SSI app
 - Optional `VITE_REOWN_PROJECT_ID` for WalletConnect
 
 ## Deploy notes
