@@ -95,6 +95,34 @@ export async function registerDiagRoutes(app: FastifyInstance, ctx: AppContext) 
         skills: {
           count: ctx.skills.registry.list().length,
           enabled: ctx.skills.registry.list().filter((s) => s.enabled).map((s) => s.id),
+          flagship: "family_office",
+          matrix: ctx.skills.registry.list().map((s) => ({
+            skill: s.id,
+            enabled: s.enabled,
+            pillars: s.tools
+              .map((t) => t.split(".")[0])
+              .filter((v, i, a) => a.indexOf(v) === i),
+            modes: s.modes,
+          })),
+        },
+        ssi: {
+          source: "sosovalue-whitepaper-5.3",
+          tokens: [
+            "MAG7.ssi",
+            "DEFI.ssi",
+            "MEME.ssi",
+            "USSI",
+          ],
+          contracts: [
+            "swap",
+            "factory",
+            "issuer",
+            "rebalancer",
+            "feeManager",
+            "stakeFactory",
+            "assetLocking",
+          ],
+          researchHubVoting: process.env.SSI_RESEARCH_HUB_VOTING_ADDRESS ?? null,
         },
         render: {
           healthCheckPath: "/api/health/live",

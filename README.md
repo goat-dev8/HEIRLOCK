@@ -1,65 +1,51 @@
 # HEIRLOCK
 
-AI Finance OS / Family Office backend for the SoSoValue Buildathon.
+**AI Financial Operating System on SoSoValue.**  
+Install Skills → Build Your Financial OS. Family Office is the flagship Skill.
 
-**Stack:** Fastify · Prisma · Supabase · Upstash Redis · SoDEX · NVIDIA AI · ValueChain
+**Hook:** *AI Finance OS. On-chain.*
 
-## Architecture (backend)
-
-- Per-user non-custodial SoDEX trading (SIWE → JWT → Enable Trading → EIP-712 relay)
-- Mainnet trades hard-capped at **≤ 1 USDC**
-- Local `SODEX_*` keys are **test wallet only** — never a shared house account
-- ValueChain contracts: WealthPolicy, ModeController, ActionLog, AttestationRegistry, ContinuityNFT, FeeCollector
-
-## Monorepo
-
-| Path | Package |
+| Surface | URL |
 |---|---|
-| `apps/api` | Fastify API |
-| `frontend` | React / TanStack Start web client (Vercel) |
-| `packages/config` | Shared env + runtime config |
-| `packages/sodex-signing` | EIP-712 / transferAsset signing |
-| `packages/ai-provider` | NVIDIA + fallbacks |
-| `contracts` | Foundry Solidity |
+| Web | https://heirlock-os.vercel.app |
+| API | https://heirlock-api.onrender.com |
+| Judges | https://heirlock-os.vercel.app/app/judges |
+| Living Loop | https://heirlock-os.vercel.app/app/living |
 
-## Quick start (local)
+## One-line value proposition
 
-```bash
-corepack enable
-pnpm install
-cp .env.example .env   # fill secrets locally — never commit .env
-pnpm --filter @heirlock/config build
-pnpm --filter @heirlock/sodex-signing build
-pnpm --filter @heirlock/ai-provider build
-pnpm --filter @heirlock/api exec prisma generate
-pnpm --filter @heirlock/api exec prisma migrate deploy
-pnpm --filter @heirlock/api dev
-```
+HEIRLOCK is the AI Financial Operating System on SoSoValue — research Terminal, allocate SSI, execute non-custodial SoDEX, continue on ValueChain.
 
-Health: `GET /api/health/live`
+## Why HEIRLOCK (vs Wave 2)
 
-## Production (Render API + Vercel frontend)
+| vs | Differentiation |
+|---|---|
+| Mosaic | Real non-custodial fill + continuity modes; they simulate baskets |
+| Sonar | Family Office + Guardian/Heir life-cycle; they optimize the fund |
+| sosomind | Governed Skills OS clarity over breadth sprawl |
+| Edgework | Insight → governed Act; they stop at analytics |
 
-### API — Render
-Blueprint: [`render.yaml`](./render.yaml)
+## Judge path (90s)
 
-- **Service:** `heirlock-api` (Node web service, free plan)
-- **URL:** https://heirlock-api.onrender.com
-- **Health check:** `/api/health/live`
-- Secrets via Render env vars — never committed
+1. `/app/skills` — Family Office flagship ON  
+2. `/app/living` — Terminal evidence → proposal → preflight  
+3. `/app/trading` — capped EIP-712 → fill proof → SoDEX Portfolio  
+4. `/app/ssi` — Terminal index level ≠ MAG7.ssi token; whitepaper Base contracts  
+5. Continuity → Simulate Guardian  
+6. `/app/health` + `/app/track`
 
-### Web — Vercel
-- **Live:** https://heirlock-os.vercel.app (also https://heirlock-beta.vercel.app)
-- Project: `heirlock` · **Root Directory: `frontend`** (required — never build monorepo root)
-- Env: all `VITE_*` keys from `frontend/.env` (synced via `node scripts/deploy-vercel.mjs`)
-- Framework: TanStack Start + Nitro `vercel` preset
-- Install/build: `npm install` / `npm run build` inside `frontend/`
+## Demo (≤4 min)
 
-Redeploy:
-```bash
-node scripts/deploy-vercel.mjs
-```
+Landing hook → Skills → Living Loop fill → SSI dual-source → Guardian → `/track` + `/diag` → ask.
 
-## License
+## SSI (whitepaper §5.3 only)
 
-Private — SoSoValue Buildathon submission.
+Tokens: MAG7.ssi, DEFI.ssi, MEME.ssi, USSI.  
+Contracts: swap, factory, issuer, rebalancer, feeManager, stakeFactory, assetLocking.  
+Retail allocate via https://ssi.sosovalue.com — HEIRLOCK never invents ResearchHubVoting.
+
+## Stack
+
+Fastify API · Prisma/Supabase · TanStack Start frontend · ValueChain contracts · Per-user SoDEX EIP-712 relay.
+
+See `WINNING_EXECUTION_PLAN.md`, `PRODUCT_AUDIT.md`, `PROJECT_MEMORY.md`.

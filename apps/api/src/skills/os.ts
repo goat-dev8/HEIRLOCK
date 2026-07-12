@@ -1,6 +1,7 @@
 export type WealthMode = "alive" | "guardian" | "heir";
 
 export type SkillId =
+  | "family_office"
   | "research"
   | "portfolio"
   | "risk"
@@ -33,6 +34,26 @@ export interface SkillDefinition {
 }
 
 const BUILTIN: SkillDefinition[] = [
+  {
+    id: "family_office",
+    name: "Family Office",
+    description:
+      "Flagship Skill — orchestrates Research → Risk → SSI → SoDEX → Execution → Continuity into one Living Loop",
+    enabled: true,
+    modes: ["alive", "guardian", "heir"],
+    permissions: ["read", "propose", "execute", "relay", "attest"],
+    tools: [
+      "fo.living_loop",
+      "fo.brief",
+      "soso.news",
+      "soso.etf",
+      "soso.macro",
+      "ssi.snapshot",
+      "sodex.portfolio",
+      "sodex.relay",
+      "policy.check",
+    ],
+  },
   {
     id: "research",
     name: "Research",
@@ -72,20 +93,21 @@ const BUILTIN: SkillDefinition[] = [
   {
     id: "ssi",
     name: "SSI",
-    description: "Smart Stable Index data and (later) on-chain actions",
+    description:
+      "Terminal index analytics + whitepaper Base contracts; allocate via official SSI app",
     enabled: true,
     modes: ["alive", "guardian"],
     permissions: ["read", "propose"],
-    tools: ["ssi.constituents", "ssi.snapshot"],
+    tools: ["ssi.constituents", "ssi.snapshot", "ssi.config"],
   },
   {
     id: "sodex",
     name: "SoDEX",
-    description: "Per-user SoDEX verify + portfolio",
+    description: "Per-user SoDEX verify + portfolio + markets",
     enabled: true,
     modes: ["alive", "guardian"],
     permissions: ["read"],
-    tools: ["sodex.verify", "sodex.portfolio"],
+    tools: ["sodex.verify", "sodex.portfolio", "sodex.markets"],
   },
   {
     id: "execution",
@@ -117,11 +139,11 @@ const BUILTIN: SkillDefinition[] = [
   {
     id: "guardian",
     name: "Guardian",
-    description: "Continuity / risk-off automation",
-    enabled: false,
-    modes: ["guardian"],
+    description: "Risk-off continuity when the principal cannot act",
+    enabled: true,
+    modes: ["guardian", "alive"],
     permissions: ["read", "propose", "execute", "attest"],
-    tools: ["guardian.alert"],
+    tools: ["guardian.alert", "guardian.simulate"],
   },
   {
     id: "tax",
@@ -135,11 +157,11 @@ const BUILTIN: SkillDefinition[] = [
   {
     id: "estate",
     name: "Estate",
-    description: "Inheritance / heir continuity skill",
-    enabled: false,
-    modes: ["heir"],
+    description: "Heir continuity sandbox — labeled, not the homepage",
+    enabled: true,
+    modes: ["heir", "alive"],
     permissions: ["read", "attest"],
-    tools: [],
+    tools: ["estate.sandbox"],
   },
 ];
 

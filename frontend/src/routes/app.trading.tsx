@@ -268,6 +268,12 @@ function OrderTicket({
   }, [symbol, lastPrice]);
   const [preparing, setPreparing] = useState(false);
   const [placing, setPlacing] = useState(false);
+  const [proof, setProof] = useState<{
+    orderId?: string;
+    sodexOrderId?: string;
+    relayId?: string;
+    portfolioUrl: string;
+  } | null>(null);
   const [prepared, setPrepared] = useState<{
     params: unknown;
     actionType: string;
@@ -276,6 +282,8 @@ function OrderTicket({
   } | null>(null);
   const { address } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
+  const sodexPortfolioUrl =
+    network === "mainnet" ? `${env.SODEX.mainnetAppUrl}/portfolio` : `${env.SODEX.testnetAppUrl}/portfolio`;
 
   const notional = useMemo(() => {
     const n = Number(price) * Number(size);
@@ -348,9 +356,13 @@ function OrderTicket({
         message: { payloadHash, nonce },
       })) as Hex;
       const apiSign = toTypedApiSign(rawSig);
-      const res = await api<{ orderId?: string; sodexOrderId?: string; proofUrl?: string }>(
-        "/api/sodex/orders/place",
-        {
+      const res = await api<{
+        orderId?: string;
+        sodexOrderId?: string;
+        proofUrl?: string;
+        relayId?: string;
+        id?: string;
+      }>("/api/sodex/orders/place", {
           method: "POST",
           auth: true,
           body: {
@@ -362,10 +374,33 @@ function OrderTicket({
             notionalUsd: prepared.notionalUsd,
             side,
           },
-        },
-      );
+        });
+      const sodexOrderId = res.sodexOrderId ?? res.orderId;
+      const relayId = res.relayId ?? res.id;
+      setProof({
+        orderId: res.orderId,
+        sodexOrderId,
+        relayId,
+        portfolioUrl: sodexPortfolioUrl,
+      });
+      try {
+        await api("/api/fo/track", {
+          method: "POST",
+          auth: true,
+          body: {
+            kind: "sodex_fill",
+            thesis: `${side.toUpperCase()} ${symbol} under Family Office policy`,
+            symbol,
+            orderId: sodexOrderId,
+            relayId,
+            outcome: "PENDING",
+          },
+        });
+      } catch {
+        /* track is best-effort */
+      }
       toast.success(
-        `Order accepted${res.sodexOrderId ? ` · SoDEX ${res.sodexOrderId}` : res.orderId ? ` · ${res.orderId}` : ""}`,
+        `Order accepted${sodexOrderId ? ` · SoDEX ${sodexOrderId}` : ""}`,
       );
       setPrepared(null);
       setSize("");
@@ -453,7 +488,26 @@ function OrderTicket({
         <div className="pt-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
           EIP-712 ExchangeAction · 0x01 apiSign · non-custodial
         </div>
-      </div>
+      
+
+        {proof ? (
+          <div className="mt-3 rounded-md border border-accent-1/30 bg-accent-1/5 p-3 text-sm">
+            <div className="font-display text-sm font-medium">Fill proof</div>
+            <div className="mt-2 space-y-1 font-mono text-[11px] text-muted-foreground">
+              {proof.relayId ? <div>Relay audit: {proof.relayId}</div> : null}
+              {proof.sodexOrderId ? <div>SoDEX orderID: {proof.sodexOrderId}</div> : null}
+            </div>
+            <a href={proof.portfolioUrl} target="_blank" rel="noreferrer" className="mt-3 inline-block">
+              <Button size="sm" variant="secondary">
+                Open SoDEX Portfolio history <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
+              </Button>
+            </a>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              CLOB fills settle on SoDEX — never treat a relay UUID as a ValueChain explorer tx.
+            </p>
+          </div>
+        ) : null}
+</div>
     </Panel>
   );
 }

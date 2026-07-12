@@ -57,14 +57,19 @@ export interface SkillEvent {
 }
 export interface SsiConfig {
   appUrl: string;
+  earnUrl?: string;
+  rewardUrl?: string;
   baseChainId: number;
   baseRpc: string;
   sosoTokenBase: string;
   sosoTokenEthereum: string;
-  onChain: { router: string | null; staking: string | null; voting: string | null; note?: string };
+  onChain: Record<string, string | null | undefined>;
+  indexTokens?: Array<{ symbol: string; address: string; basescan?: string }>;
+  protocolContracts?: Array<{ role: string; address: string; basescan?: string }>;
   dataSource: string;
   defaultIndexId?: string;
   knownIndices?: string[];
+  [k: string]: unknown;
 }
 export interface SodexGateways {
   environment: string;
@@ -405,19 +410,22 @@ export function useSsiSnapshot(indexId: string) {
         data.change_pct_24h ??
         data.change24h ??
         data.changePct24h;
-      let change24h =
+      // Backend normalizeSsiSnapshot already returns percent points. Do not ×100 again.
+      const change24h =
         changeRaw != null && changeRaw !== "" ? Number(changeRaw) : undefined;
-      if (change24h != null && Number.isFinite(change24h) && Math.abs(change24h) <= 1) {
-        change24h = change24h * 100;
-      }
       return {
         nav: nav as number | string | undefined,
         aum: (res.aum ?? data.aum ?? data.AUM ?? data.tvl ?? data.market_cap) as
           | number
           | string
           | undefined,
-        change24h,
+        change24h: change24h != null && Number.isFinite(change24h) ? change24h : undefined,
         note: (res.note ?? data.note) as string | undefined,
+        priceKind: (res.priceKind ?? "terminal_index_level") as string,
+        onChainToken: res.onChainToken as
+          | { symbol: string; address: string; basescan?: string }
+          | null
+          | undefined,
         indexId,
         raw: res,
       };

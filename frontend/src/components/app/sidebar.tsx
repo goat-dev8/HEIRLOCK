@@ -4,8 +4,9 @@ import { Logo } from "@/components/site/logo";
 import {
   Activity,
   Brain,
-  FileSignature,
   Compass,
+  FileSignature,
+  Gavel,
   HeartPulse,
   LayoutGrid,
   LineChart,
@@ -13,18 +14,23 @@ import {
   Settings as SettingsIcon,
   Shield,
   Sparkles,
+  Target,
   Wallet,
+  Workflow,
 } from "lucide-react";
 
 const NAV = [
+  { to: "/app/living", label: "Living Loop", icon: Workflow, group: "OS" },
+  { to: "/app/skills", label: "Skills", icon: Sparkles, group: "OS" },
   { to: "/app/portfolio", label: "Portfolio", icon: Wallet, group: "Wealth" },
   { to: "/app/trading", label: "Trading", icon: LineChart, group: "Wealth" },
   { to: "/app/ssi", label: "SSI", icon: LayoutGrid, group: "Wealth" },
   { to: "/app/ai", label: "Family Office AI", icon: Brain, group: "Intelligence" },
   { to: "/app/research", label: "Research", icon: Newspaper, group: "Intelligence" },
-  { to: "/app/skills", label: "Skills", icon: Sparkles, group: "Platform" },
   { to: "/app/continuity", label: "Continuity", icon: Shield, group: "Platform" },
+  { to: "/app/track", label: "Track", icon: Target, group: "Platform" },
   { to: "/app/activity", label: "Activity", icon: Activity, group: "Platform" },
+  { to: "/app/judges", label: "Judges", icon: Gavel, group: "System" },
   { to: "/app/contracts", label: "Contracts", icon: FileSignature, group: "System" },
   { to: "/app/health", label: "Health", icon: HeartPulse, group: "System" },
   { to: "/app/onboarding", label: "Onboarding", icon: Compass, group: "System" },
@@ -41,6 +47,11 @@ export function AppSidebar() {
         <Link to="/">
           <Logo />
         </Link>
+      </div>
+      <div className="border-b border-border/40 px-5 py-3">
+        <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/70">
+          Install Skills → Build Your OS
+        </div>
       </div>
       <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-8 pt-4">
         {groups.map((g) => (
@@ -78,11 +89,24 @@ export function AppSidebar() {
       </nav>
       <div className="border-t border-border/40 px-5 py-4">
         <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/50">
-          Ecosystem
+          AI Finance OS
         </div>
-        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground/70">
-          SoSoValue · SSI · SoDEX · ValueChain
-        </div>
+        <a
+          href="https://ssi.sosovalue.com"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 block text-xs text-muted-foreground hover:text-foreground"
+        >
+          SSI app ↗
+        </a>
+        <a
+          href="https://sodex.com"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 block text-xs text-muted-foreground hover:text-foreground"
+        >
+          SoDEX ↗
+        </a>
       </div>
     </aside>
   );

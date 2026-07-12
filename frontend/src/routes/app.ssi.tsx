@@ -3,44 +3,58 @@ import { useEffect, useState } from "react";
 import { useSsiConfig, useSsiConstituents, useSsiSnapshot } from "@/lib/api-hooks";
 import { RequireAuth } from "@/components/app/require-auth";
 import { EmptyState, Panel, PanelHeader, Stat } from "@/components/app/panel";
+import { DataBadge } from "@/components/app/data-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUpRight, LayoutGrid, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, LayoutGrid } from "lucide-react";
 import { env } from "@/lib/env";
-import { num, short, usd } from "@/lib/format";
+import { num, pctPoints, short, usd } from "@/lib/format";
 
 export const Route = createFileRoute("/app/ssi")({
-  head: () => ({ meta: [{ title: "SSI - HEIRLOCK" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "SSI Skill — HEIRLOCK" }, { name: "robots", content: "noindex" }] }),
   component: SsiPage,
 });
 
-const KNOWN = [
-  "ssimag7",
-  "ssilayer1",
-  "ssidefi",
-  "ssimeme",
-  "ssiai",
-  "ssirwa",
-  "ssilayer2",
-];
+const KNOWN = ["ssimag7", "ssidefi", "ssimeme", "ssilayer1", "ssilayer2", "ssiai", "ssirwa"];
 
 function SsiPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-semibold tracking-tight">Smart Stable Index</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Live SoSoValue index NAV and constituents. Mint / stake / vote happen on the official SSI
-          app until Base addresses are verified.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            SSI Skill
+          </div>
+          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">
+            SoSoValue Indexes
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Terminal index analytics in HEIRLOCK. Mint / stake / earn on the official SSI app. Trade
+            proxies on SoDEX. Why HEIRLOCK: dual-source honesty + whitepaper Base contracts — not
+            invented routers.
+          </p>
+        </div>
+        <DataBadge status="LIVE" />
       </div>
-      <div className="rounded-lg border border-border/60 bg-surface-1/70 px-4 py-3 text-sm text-muted-foreground">
-        <span className="text-foreground">Flow:</span> pick an index → read NAV + weights here → open
-        SSI app to allocate on Base → return to Portfolio / Trading for SoDEX execution.
+
+      <div className="rounded-lg border border-accent-1/30 bg-accent-1/5 px-4 py-3 text-sm">
+        <div className="font-display text-sm font-medium text-foreground">Allocate flow</div>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
+          <li>Research Terminal index level + constituents here</li>
+          <li>Open SSI app to allocate on Base (official mint / stake / earn)</li>
+          <li>
+            Return to{" "}
+            <Link to="/app/trading" className="text-accent-1 hover:underline">
+              Trading
+            </Link>{" "}
+            for SoDEX proxy execution
+          </li>
+        </ol>
       </div>
+
       <Config />
       <RequireAuth>
         <Explorer />
@@ -51,48 +65,106 @@ function SsiPage() {
 
 function Config() {
   const { data, isLoading } = useSsiConfig();
-  if (isLoading) return <Skeleton className="h-32 rounded-lg" />;
+  if (isLoading) return <Skeleton className="h-40 rounded-lg" />;
   if (!data) return null;
-  const anyNull = !data.onChain.router || !data.onChain.staking || !data.onChain.voting;
+
+  const tokens = (data.indexTokens as Array<{ symbol: string; address: string; basescan?: string }>) ?? [];
+  const contracts =
+    (data.protocolContracts as Array<{ role: string; address: string; basescan?: string }>) ?? [];
+
   return (
-    <Panel className="p-5">
-      <div className="grid gap-4 md:grid-cols-4">
-        <Stat label="Base chain" value={data.baseChainId} hint="Ethereum L2" />
-        <Stat label="SOSO on Base" value={short(data.sosoTokenBase)} hint="ERC-20" />
-        <Stat label="SOSO on Ethereum" value={short(data.sosoTokenEthereum)} hint="ERC-20" />
-        <Stat
-          label="Data source"
-          value={<span className="text-base">SoSoValue indices</span>}
-          hint="OpenAPI"
-        />
-      </div>
-      {anyNull && (
-        <div className="mt-4 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
-          <ShieldAlert className="mt-0.5 h-3.5 w-3.5" />
-          <span>
-            On-chain router, staking and voting addresses are not yet verified on BaseScan. On-chain
-            actions deep-link to the official SSI app; we do not invent addresses.
-          </span>
+    <div className="space-y-4">
+      <Panel className="p-5">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <PanelHeader title="Ecosystem" description="SOSO + Terminal" />
+          <DataBadge status="LIVE" />
         </div>
-      )}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <a href={env.SSI.appUrl} target="_blank" rel="noreferrer">
-          <Button size="sm">
-            Open SSI app <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
-          </Button>
-        </a>
-        <a href={env.SSI.earnUrl} target="_blank" rel="noreferrer">
-          <Button size="sm" variant="ghost">
-            Earn
-          </Button>
-        </a>
-        <a href={env.SSI.rewardUrl} target="_blank" rel="noreferrer">
-          <Button size="sm" variant="ghost">
-            Reward
-          </Button>
-        </a>
-      </div>
-    </Panel>
+        <div className="grid gap-4 md:grid-cols-4">
+          <Stat label="Base chain" value={data.baseChainId} hint="Ethereum L2" />
+          <Stat label="SOSO on Base" value={short(data.sosoTokenBase)} hint="ERC-20" />
+          <Stat label="SOSO on Ethereum" value={short(data.sosoTokenEthereum)} hint="ERC-20" />
+          <Stat
+            label="Data source"
+            value={<span className="text-base">Terminal OpenAPI</span>}
+            hint="Index level ≠ token price"
+          />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <a href={data.appUrl || env.SSI.appUrl} target="_blank" rel="noreferrer">
+            <Button size="sm">
+              Allocate on SSI app <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
+          </a>
+          <a href={(data as { earnUrl?: string }).earnUrl || env.SSI.earnUrl} target="_blank" rel="noreferrer">
+            <Button size="sm" variant="secondary">
+              Earn
+            </Button>
+          </a>
+          <a href={(data as { rewardUrl?: string }).rewardUrl || env.SSI.rewardUrl} target="_blank" rel="noreferrer">
+            <Button size="sm" variant="ghost">
+              Reward
+            </Button>
+          </a>
+          <a href={`${env.SSI.appUrl}/buy/MAG7.ssi`} target="_blank" rel="noreferrer">
+            <Button size="sm" variant="ghost">
+              MAG7.ssi Onchain Data
+            </Button>
+          </a>
+        </div>
+      </Panel>
+
+      {tokens.length > 0 ? (
+        <Panel className="p-5">
+          <PanelHeader
+            title="Index tokens (whitepaper)"
+            description="Official Base ERC-20 addresses — §5.3 Key Addresses"
+          />
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {tokens.map((t) => (
+              <a
+                key={t.symbol}
+                href={t.basescan}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between rounded-md border border-border/50 bg-surface-0/50 px-3 py-2 text-sm hover:border-accent-1/40"
+              >
+                <span className="font-mono text-xs">{t.symbol}</span>
+                <span className="font-mono text-[11px] text-muted-foreground">{short(t.address, 6)}</span>
+              </a>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
+
+      {contracts.length > 0 ? (
+        <Panel className="p-5">
+          <PanelHeader
+            title="Protocol contracts (whitepaper)"
+            description="swap · factory · issuer · rebalancer · feeManager · stakeFactory · assetLocking"
+          />
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {contracts.map((c) => (
+              <a
+                key={c.role}
+                href={c.basescan}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between rounded-md border border-border/50 bg-surface-0/50 px-3 py-2 text-sm hover:border-accent-1/40"
+              >
+                <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                  {c.role}
+                </span>
+                <span className="font-mono text-[11px]">{short(c.address, 6)}</span>
+              </a>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            ResearchHubVoting deploy address is omitted until officially listed. HEIRLOCK never invents
+            it.
+          </p>
+        </Panel>
+      ) : null}
+    </div>
   );
 }
 
@@ -114,6 +186,8 @@ function Explorer() {
     setQuery((prev) => (prev === "BTCX20" || prev === initial ? d : prev));
   }, [cfg.data?.defaultIndexId, initial]);
 
+  const token = snap.data?.onChainToken;
+
   return (
     <div className="space-y-4">
       <Panel className="p-4">
@@ -126,11 +200,7 @@ function Explorer() {
         >
           <div className="min-w-[12rem] flex-1 space-y-1.5">
             <Label className="font-mono text-[10px] uppercase tracking-widest">Index ticker</Label>
-            <Input
-              value={indexId}
-              onChange={(e) => setIndexId(e.target.value)}
-              placeholder="ssimag7"
-            />
+            <Input value={indexId} onChange={(e) => setIndexId(e.target.value)} placeholder="ssimag7" />
           </div>
           <Button type="submit">Load</Button>
         </form>
@@ -165,36 +235,74 @@ function Explorer() {
           />
         </Panel>
       ) : (
-        <div className="grid gap-4 md:grid-cols-3">
-          <Stat label="NAV / price" value={snap.isLoading ? "…" : usd(snap.data?.nav)} hint={query} />
-          <Stat
-            label="AUM"
-            value={
-              snap.isLoading
-                ? "…"
-                : snap.data?.aum != null
-                  ? usd(snap.data.aum, { compact: true })
-                  : "Unavailable"
-            }
-            hint={snap.data?.note ?? "Not always in market-snapshot"}
-          />
-          <Stat
-            label="Change 24h"
-            value={
-              snap.isLoading
-                ? "…"
-                : snap.data?.change24h != null
-                  ? `${num(snap.data.change24h, 2)}%`
-                  : "—"
-            }
-          />
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <DataBadge status={snap.isLoading ? "CACHED" : "LIVE"} />
+            <span>Terminal index level (OpenAPI) — not the on-chain SSI token USD price</span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Stat
+              label="Terminal index level"
+              value={snap.isLoading ? "…" : usd(snap.data?.nav)}
+              hint={query}
+            />
+            <Stat
+              label="AUM on Terminal snapshot"
+              value={
+                snap.isLoading
+                  ? "…"
+                  : snap.data?.aum != null
+                    ? usd(snap.data.aum, { compact: true })
+                    : "Unavailable"
+              }
+              hint={
+                snap.data?.note ??
+                "Not on market-snapshot — open SSI Onchain Data for TVL / holders"
+              }
+            />
+            <Stat
+              label="Change 24h"
+              value={snap.isLoading ? "…" : pctPoints(snap.data?.change24h)}
+              hint="Percent points from OpenAPI fraction"
+            />
+          </div>
+          {token ? (
+            <div className="rounded-lg border border-border/60 bg-surface-1/70 px-4 py-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                    On-chain token (whitepaper)
+                  </div>
+                  <div className="mt-1 font-display text-lg">{token.symbol}</div>
+                  <div className="font-mono text-xs text-muted-foreground">{short(token.address, 8)}</div>
+                </div>
+                <div className="flex gap-2">
+                  {token.basescan ? (
+                    <a href={token.basescan} target="_blank" rel="noreferrer">
+                      <Button size="sm" variant="secondary">
+                        BaseScan <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+                      </Button>
+                    </a>
+                  ) : null}
+                  <a href={`${env.SSI.appUrl}/buy/${token.symbol}`} target="_blank" rel="noreferrer">
+                    <Button size="sm">
+                      Buy on SSI <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+                    </Button>
+                  </a>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Token market price (~$0.4 class for MAG7.ssi) differs from Terminal index level above.
+              </p>
+            </div>
+          ) : null}
         </div>
       )}
 
       <Panel>
         <PanelHeader
           title="Constituents"
-          description={`${query} · SoSoValue`}
+          description={`${query} · SoSoValue Terminal`}
           action={
             <Link to="/app/trading" className="text-xs text-muted-foreground hover:text-foreground">
               Trade proxies on SoDEX →

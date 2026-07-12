@@ -170,7 +170,8 @@ export function normalizeSsiSnapshot(raw: unknown, indexId: string) {
       data.changePct24h ??
       data.pctChange24h,
   );
-  // Official SoSoValue returns fractional change (e.g. -0.0016 = -0.16%)
+  // Official SoSoValue returns fractional change (e.g. -0.0032 = -0.32%).
+  // Normalize once to percent points here; clients must NOT multiply again.
   const change24hPct =
     changeRaw == null ? null : Math.abs(changeRaw) <= 1 ? changeRaw * 100 : changeRaw;
   const aum = num(data.aum ?? data.AUM ?? data.tvl ?? data.total_value_locked ?? data.market_cap);
@@ -178,10 +179,12 @@ export function normalizeSsiSnapshot(raw: unknown, indexId: string) {
     indexId,
     nav: price,
     price,
+    priceKind: "terminal_index_level",
     aum: aum ?? null,
     aumAvailable: aum != null,
     change24h: change24hPct,
     change24hPct,
+    changeUnit: "percent_points",
     roi7d: pctMaybe(data["7day_roi"] ?? data.roi_7d),
     roi1m: pctMaybe(data["1month_roi"] ?? data.roi_1m),
     roi3m: pctMaybe(data["3month_roi"] ?? data.roi_3m),
@@ -191,7 +194,7 @@ export function normalizeSsiSnapshot(raw: unknown, indexId: string) {
     source: "sosovalue",
     note:
       aum == null
-        ? "AUM/TVL is not always present on SoSoValue index market-snapshot"
+        ? "AUM/TVL is not on Terminal index market-snapshot — see SSI Onchain Data / BaseScan token metrics"
         : undefined,
   };
 }

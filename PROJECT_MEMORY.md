@@ -1,68 +1,50 @@
 # HEIRLOCK — Project Memory
 
-Last updated: 2026-07-12
+Last updated: 2026-07-12 (Winning plan implementation in progress)
 
-## What HEIRLOCK is
+## Mode
 
-AI Family Office / Finance OS on SoSoValue. Non-custodial. Per-user SoDEX relay (SIWE → JWT → Enable Trading → EIP-712 → relay). Mainnet trades hard-capped (≤ $1 USDC notional in current profile).
+Implementing `WINNING_EXECUTION_PLAN.md` (approved). Identity: **AI Financial Operating System on SoSoValue**. Family Office = flagship Skill.
 
 ## Live surfaces
 
 | Layer | URL |
 |---|---|
 | API | https://heirlock-api.onrender.com |
-| Web | https://heirlock-os.vercel.app (also heirlock-beta.vercel.app) |
-| Repo | https://github.com/goat-dev8/HEIRLOCK |
+| Web | https://heirlock-os.vercel.app |
+| Judges | /app/judges |
+| Living Loop | /app/living |
+| Track | /app/track |
 
-## Product flow (user-visible)
+## Completed this session (plan IDs)
 
-1. Connect wallet + SIWE
-2. Choose Mainnet (default) or labeled Testnet
-3. Open official SoDEX → Enable Trading → return → Verify aid
-4. Portfolio: balances from SoDEX; **USD marks from spot tickers `lastPx`** (vUSDC/USDC = $1; WSOSO↔SOSO alias)
-5. SSI: SoSoValue OpenAPI indices (default `ssimag7`). NAV = snapshot `price`. 24h = `24h_change_pct` × 100. AUM often unavailable from snapshot (show Unavailable, never invent)
-6. Trading: symbols enriched with tickers; prepare → EIP-712 ExchangeAction → place
-7. Continuity: ValueChain WealthPolicy / ModeController / ContinuityNFT
-8. AI UI label: **Sonnet 5** (do not expose vendor cascade in the product UI)
+- **P0** Identity lock in WINNING_EXECUTION_PLAN + README  
+- **A1–A4, A6** SSI dual-source, % fix (no FE double×), whitepaper contracts, Allocate UX, DataBadge  
+- **A5** Portfolio nested balances unwrap (prior commit; keep)  
+- **B1–B5** Living Loop API+UI, /judges, fill proof tray, preflight, /diag skills+ssi matrix  
+- **B6** README judge/demo script  
+- **C1, C3, C4** FO Brief API, /track + outcomes PENDING, track on place  
+- **D1–D4** Guardian simulate, Skills messaging, IA (sidebar OS group), landing rewrite  
+- **E1–E3** Macro/ETF/Feeds in Living Loop; Brief optional modules; SSI allocate/earn links  
 
-## Real-data contracts (do not regress)
+## SSI whitepaper addresses (Base) — do not invent beyond these
 
-### SoDEX
-- Spot REST mainnet: `https://mainnet-gw.sodex.dev/api/v1/spot`
-- Spot REST testnet: `https://testnet-gw.sodex.dev/api/v1/spot`
-- Prices: `GET /markets/tickers` → `lastPx`
-- Symbols: `GET /markets/symbols` (metadata only until HEIRLOCK merges tickers)
-- HEIRLOCK enrichment: `apps/api/src/sodex/mark-to-market.ts` + `/api/sodex/markets/symbols` + `/api/sodex/me/portfolio`
-- Orderbook respects `market=spot|perps`
+Tokens: MAG7.ssi `0x9E6A46f2…403B55`, DEFI.ssi, MEME.ssi, USSI.  
+Protocol: swap, factory, issuer, rebalancer, feeManager, stakeFactory, assetLocking.  
+ResearchHubVoting: null until official.
 
-### SSI / SoSoValue
-- Base: `https://openapi.sosovalue.com/openapi/v1` + `x-soso-api-key`
-- List: `GET /indices`
-- Snapshot: `GET /indices/{id}/market-snapshot` fields: `price`, `24h_change_pct`, ROI fields
-- Valid tickers include `ssimag7`, `ssilayer1`, `ssidefi`, … — **not** ETF ids like `BTCX20`
-- On-chain Base router/staking/voting remain null until verified (deep-link SSI app only)
+## Data honesty
 
-### Frontend branding
-- Mark: `frontend/public/brand/heirlock-mark.svg` (+ favicon)
-- DESIGN.md at repo root (Stripe-clarity + antique gold)
-- AI pages must not mention NVIDIA
-
-## Known gaps / honesty rules
-
-- Portfolio balances unwrap SoDEX `{ data: { balances: [...] } }` — never treat empty unwrap as “no funds” without checking envelope
-- No fabricated PnL or USD when tickers missing → show Unavailable / note
-- SSI AUM often null from official snapshot
-- Official SSI Base contract addresses (router / staking / voting) stay null until verified on BaseScan — UI deep-links to SSI app
-- Optional `VITE_REOWN_PROJECT_ID` for WalletConnect
-
-## Deploy notes
-
-- Render API auto-deploys from `main`; restore env via `scripts/restore-render-env.mjs` if PUT wiped secrets
-- Vercel FE: `node scripts/deploy-vercel.mjs` (token: `vercal_token` / `VERCEL_TOKEN`)
-- **Vercel Root Directory must be `frontend`** — Git deploys from monorepo root will fail with `pnpm -r build`
-- Git push: `node scripts/push-github.mjs` (`GITHUB_TOKEN`)
-- CORS/SIWE allow `*.vercel.app` + localhost
+- OpenAPI `ssiMAG7` price = **Terminal index level**  
+- MAG7.ssi ERC-20 = **token** (~$0.42 class)  
+- `change_pct_24h` fraction → percent points **once** in API; FE must not ×100 again  
+- AUM often missing on Terminal snapshot  
 
 ## Never invent
 
-SoDEX EIP-712 domains, SSI Base addresses, shared house SoDEX keys, or mock market numbers.
+SoDEX EIP-712 domains, ResearchHubVoting address, house SoDEX keys, mock markets.
+
+## Deploy
+
+- Vercel rootDirectory=`frontend`; engines node `24.x`  
+- Push: `node scripts/push-github.mjs`

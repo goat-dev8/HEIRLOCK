@@ -67,5 +67,15 @@ describe("mark-to-market", () => {
     assert.equal(snap.nav, 20.93);
     assert.ok(snap.change24h != null && Math.abs(snap.change24h + 0.16) < 1e-9);
     assert.equal(snap.aum, null);
+    assert.equal(snap.priceKind, "terminal_index_level");
+    assert.equal(snap.changeUnit, "percent_points");
+  });
+
+  it("maps live change_pct_24h fraction to percent points once", () => {
+    const snap = normalizeSsiSnapshot(
+      { price: 11.356, change_pct_24h: -0.0032 },
+      "ssimag7",
+    );
+    assert.ok(snap.change24h != null && Math.abs(snap.change24h + 0.32) < 1e-9);
   });
 });

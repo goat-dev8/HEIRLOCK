@@ -39,7 +39,8 @@ function SkillsPage() {
         <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Platform</div>
         <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Skills</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Composable capabilities. Enable per-mode; the OS filters tools accordingly.
+          Install Skills → Build Your Financial OS. Family Office is the flagship Skill; toggle others
+          to reshape the Living Loop tool registry.
         </p>
       </div>
 

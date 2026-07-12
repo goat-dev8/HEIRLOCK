@@ -36,3 +36,12 @@ export function relTime(iso: string | number | Date | null | undefined): string 
   if (abs < 86400) return rtf.format(sign * Math.round(abs / 3600), "hour");
   return rtf.format(sign * Math.round(abs / 86400), "day");
 }
+
+/** Percent points already normalized server-side (e.g. -0.32 → "-0.32%"). Never ×100. */
+export function pctPoints(n: number | string | null | undefined, digits = 2): string {
+  if (n === null || n === undefined || n === "") return "—";
+  const v = typeof n === "string" ? Number(n) : n;
+  if (!Number.isFinite(v)) return "—";
+  const sign = v > 0 ? "+" : "";
+  return `${sign}${v.toLocaleString(undefined, { maximumFractionDigits: digits })}%`;
+}

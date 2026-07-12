@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { useReadContract, useReadContracts } from "wagmi";
 import { useNetwork } from "@/lib/network-store";
 import {
@@ -164,9 +165,49 @@ function ContinuityPage() {
               &nbsp;are called on ModeController by the addresses authorised in your WealthPolicy. Estate
               transitions have real-world legal implications — HEIRLOCK does not provide legal advice.
             </div>
+            <div className="mt-3">
+              <GuardianSimulateButton />
+            </div>
           </div>
         </div>
       </Panel>
+    </div>
+  );
+}
+
+function GuardianSimulateButton() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  return (
+    <div className="space-y-2">
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            const { api } = await import("@/lib/api");
+            const res = await api<Record<string, unknown>>("/api/fo/guardian/simulate", {
+              method: "POST",
+              auth: true,
+              body: {},
+            });
+            setResult(res);
+          } catch (e) {
+            setResult({ error: (e as Error).message });
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        Simulate Guardian (SANDBOX)
+      </Button>
+      {result ? (
+        <pre className="max-h-40 overflow-auto rounded-md border border-border/40 bg-surface-0 p-2 font-mono text-[10px] text-muted-foreground">
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      ) : null}
     </div>
   );
 }

@@ -13,12 +13,15 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppTradingRouteImport } from './routes/app.trading'
+import { Route as AppTrackRouteImport } from './routes/app.track'
 import { Route as AppSsiRouteImport } from './routes/app.ssi'
 import { Route as AppSkillsRouteImport } from './routes/app.skills'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppResearchRouteImport } from './routes/app.research'
 import { Route as AppPortfolioRouteImport } from './routes/app.portfolio'
 import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
+import { Route as AppLivingRouteImport } from './routes/app.living'
+import { Route as AppJudgesRouteImport } from './routes/app.judges'
 import { Route as AppHealthRouteImport } from './routes/app.health'
 import { Route as AppContractsRouteImport } from './routes/app.contracts'
 import { Route as AppContinuityRouteImport } from './routes/app.continuity'
@@ -43,6 +46,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppTradingRoute = AppTradingRouteImport.update({
   id: '/trading',
   path: '/trading',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTrackRoute = AppTrackRouteImport.update({
+  id: '/track',
+  path: '/track',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSsiRoute = AppSsiRouteImport.update({
@@ -73,6 +81,16 @@ const AppPortfolioRoute = AppPortfolioRouteImport.update({
 const AppOnboardingRoute = AppOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLivingRoute = AppLivingRouteImport.update({
+  id: '/living',
+  path: '/living',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppJudgesRoute = AppJudgesRouteImport.update({
+  id: '/judges',
+  path: '/judges',
   getParentRoute: () => AppRoute,
 } as any)
 const AppHealthRoute = AppHealthRouteImport.update({
@@ -109,12 +127,15 @@ export interface FileRoutesByFullPath {
   '/app/continuity': typeof AppContinuityRoute
   '/app/contracts': typeof AppContractsRoute
   '/app/health': typeof AppHealthRoute
+  '/app/judges': typeof AppJudgesRoute
+  '/app/living': typeof AppLivingRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/portfolio': typeof AppPortfolioRoute
   '/app/research': typeof AppResearchRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
   '/app/ssi': typeof AppSsiRoute
+  '/app/track': typeof AppTrackRoute
   '/app/trading': typeof AppTradingRoute
   '/app/': typeof AppIndexRoute
 }
@@ -125,12 +146,15 @@ export interface FileRoutesByTo {
   '/app/continuity': typeof AppContinuityRoute
   '/app/contracts': typeof AppContractsRoute
   '/app/health': typeof AppHealthRoute
+  '/app/judges': typeof AppJudgesRoute
+  '/app/living': typeof AppLivingRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/portfolio': typeof AppPortfolioRoute
   '/app/research': typeof AppResearchRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
   '/app/ssi': typeof AppSsiRoute
+  '/app/track': typeof AppTrackRoute
   '/app/trading': typeof AppTradingRoute
   '/app': typeof AppIndexRoute
 }
@@ -143,12 +167,15 @@ export interface FileRoutesById {
   '/app/continuity': typeof AppContinuityRoute
   '/app/contracts': typeof AppContractsRoute
   '/app/health': typeof AppHealthRoute
+  '/app/judges': typeof AppJudgesRoute
+  '/app/living': typeof AppLivingRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/portfolio': typeof AppPortfolioRoute
   '/app/research': typeof AppResearchRoute
   '/app/settings': typeof AppSettingsRoute
   '/app/skills': typeof AppSkillsRoute
   '/app/ssi': typeof AppSsiRoute
+  '/app/track': typeof AppTrackRoute
   '/app/trading': typeof AppTradingRoute
   '/app/': typeof AppIndexRoute
 }
@@ -162,12 +189,15 @@ export interface FileRouteTypes {
     | '/app/continuity'
     | '/app/contracts'
     | '/app/health'
+    | '/app/judges'
+    | '/app/living'
     | '/app/onboarding'
     | '/app/portfolio'
     | '/app/research'
     | '/app/settings'
     | '/app/skills'
     | '/app/ssi'
+    | '/app/track'
     | '/app/trading'
     | '/app/'
   fileRoutesByTo: FileRoutesByTo
@@ -178,12 +208,15 @@ export interface FileRouteTypes {
     | '/app/continuity'
     | '/app/contracts'
     | '/app/health'
+    | '/app/judges'
+    | '/app/living'
     | '/app/onboarding'
     | '/app/portfolio'
     | '/app/research'
     | '/app/settings'
     | '/app/skills'
     | '/app/ssi'
+    | '/app/track'
     | '/app/trading'
     | '/app'
   id:
@@ -195,12 +228,15 @@ export interface FileRouteTypes {
     | '/app/continuity'
     | '/app/contracts'
     | '/app/health'
+    | '/app/judges'
+    | '/app/living'
     | '/app/onboarding'
     | '/app/portfolio'
     | '/app/research'
     | '/app/settings'
     | '/app/skills'
     | '/app/ssi'
+    | '/app/track'
     | '/app/trading'
     | '/app/'
   fileRoutesById: FileRoutesById
@@ -238,6 +274,13 @@ declare module '@tanstack/react-router' {
       path: '/trading'
       fullPath: '/app/trading'
       preLoaderRoute: typeof AppTradingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/track': {
+      id: '/app/track'
+      path: '/track'
+      fullPath: '/app/track'
+      preLoaderRoute: typeof AppTrackRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/ssi': {
@@ -280,6 +323,20 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/app/onboarding'
       preLoaderRoute: typeof AppOnboardingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/living': {
+      id: '/app/living'
+      path: '/living'
+      fullPath: '/app/living'
+      preLoaderRoute: typeof AppLivingRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/judges': {
+      id: '/app/judges'
+      path: '/judges'
+      fullPath: '/app/judges'
+      preLoaderRoute: typeof AppJudgesRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/health': {
@@ -326,12 +383,15 @@ interface AppRouteChildren {
   AppContinuityRoute: typeof AppContinuityRoute
   AppContractsRoute: typeof AppContractsRoute
   AppHealthRoute: typeof AppHealthRoute
+  AppJudgesRoute: typeof AppJudgesRoute
+  AppLivingRoute: typeof AppLivingRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppPortfolioRoute: typeof AppPortfolioRoute
   AppResearchRoute: typeof AppResearchRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppSkillsRoute: typeof AppSkillsRoute
   AppSsiRoute: typeof AppSsiRoute
+  AppTrackRoute: typeof AppTrackRoute
   AppTradingRoute: typeof AppTradingRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -342,12 +402,15 @@ const AppRouteChildren: AppRouteChildren = {
   AppContinuityRoute: AppContinuityRoute,
   AppContractsRoute: AppContractsRoute,
   AppHealthRoute: AppHealthRoute,
+  AppJudgesRoute: AppJudgesRoute,
+  AppLivingRoute: AppLivingRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppPortfolioRoute: AppPortfolioRoute,
   AppResearchRoute: AppResearchRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppSkillsRoute: AppSkillsRoute,
   AppSsiRoute: AppSsiRoute,
+  AppTrackRoute: AppTrackRoute,
   AppTradingRoute: AppTradingRoute,
   AppIndexRoute: AppIndexRoute,
 }
