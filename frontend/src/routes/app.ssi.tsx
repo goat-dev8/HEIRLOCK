@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useSsiConfig, useSsiConstituents, useSsiSnapshot } from "@/lib/api-hooks";
 import { RequireAuth } from "@/components/app/require-auth";
 import { EmptyState, Panel, PanelHeader, Stat } from "@/components/app/panel";
@@ -13,19 +13,33 @@ import { env } from "@/lib/env";
 import { num, short, usd } from "@/lib/format";
 
 export const Route = createFileRoute("/app/ssi")({
-  head: () => ({ meta: [{ title: "SSI — HEIRLOCK" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "SSI - HEIRLOCK" }, { name: "robots", content: "noindex" }] }),
   component: SsiPage,
 });
+
+const KNOWN = [
+  "ssimag7",
+  "ssilayer1",
+  "ssidefi",
+  "ssimeme",
+  "ssiai",
+  "ssirwa",
+  "ssilayer2",
+];
 
 function SsiPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Allocation</div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Smart Stable Index</h1>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">Smart Stable Index</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          On-chain data from SoSoValue's SSI. On-chain actions deep-link to the verified SSI app.
+          Live SoSoValue index NAV and constituents. Mint / stake / vote happen on the official SSI
+          app until Base addresses are verified.
         </p>
+      </div>
+      <div className="rounded-lg border border-border/60 bg-surface-1/70 px-4 py-3 text-sm text-muted-foreground">
+        <span className="text-foreground">Flow:</span> pick an index → read NAV + weights here → open
+        SSI app to allocate on Base → return to Portfolio / Trading for SoDEX execution.
       </div>
       <Config />
       <RequireAuth>
@@ -46,26 +60,36 @@ function Config() {
         <Stat label="Base chain" value={data.baseChainId} hint="Ethereum L2" />
         <Stat label="SOSO on Base" value={short(data.sosoTokenBase)} hint="ERC-20" />
         <Stat label="SOSO on Ethereum" value={short(data.sosoTokenEthereum)} hint="ERC-20" />
-        <Stat label="Data source" value={<span className="text-base">{data.dataSource}</span>} hint="SoSoValue OpenAPI" />
+        <Stat
+          label="Data source"
+          value={<span className="text-base">SoSoValue indices</span>}
+          hint="OpenAPI"
+        />
       </div>
       {anyNull && (
         <div className="mt-4 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
           <ShieldAlert className="mt-0.5 h-3.5 w-3.5" />
           <span>
-            On-chain router, staking and voting addresses are not yet verified on BaseScan. On-chain actions
-            deep-link to the official SSI app; we do not invent addresses.
+            On-chain router, staking and voting addresses are not yet verified on BaseScan. On-chain
+            actions deep-link to the official SSI app; we do not invent addresses.
           </span>
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-2">
         <a href={env.SSI.appUrl} target="_blank" rel="noreferrer">
-          <Button size="sm">Open SSI app <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" /></Button>
+          <Button size="sm">
+            Open SSI app <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
+          </Button>
         </a>
         <a href={env.SSI.earnUrl} target="_blank" rel="noreferrer">
-          <Button size="sm" variant="ghost">Earn</Button>
+          <Button size="sm" variant="ghost">
+            Earn
+          </Button>
         </a>
         <a href={env.SSI.rewardUrl} target="_blank" rel="noreferrer">
-          <Button size="sm" variant="ghost">Reward</Button>
+          <Button size="sm" variant="ghost">
+            Reward
+          </Button>
         </a>
       </div>
     </Panel>
@@ -73,10 +97,22 @@ function Config() {
 }
 
 function Explorer() {
-  const [indexId, setIndexId] = useState("BTCX20");
-  const [query, setQuery] = useState("BTCX20");
+  const cfg = useSsiConfig();
+  const defaults = (cfg.data?.knownIndices as string[] | undefined)?.length
+    ? (cfg.data!.knownIndices as string[])
+    : KNOWN;
+  const initial = String(cfg.data?.defaultIndexId ?? "ssimag7");
+  const [indexId, setIndexId] = useState(initial);
+  const [query, setQuery] = useState(initial);
   const cons = useSsiConstituents(query);
   const snap = useSsiSnapshot(query);
+
+  useEffect(() => {
+    if (!cfg.data?.defaultIndexId) return;
+    const d = String(cfg.data.defaultIndexId);
+    setIndexId((prev) => (prev === "BTCX20" || prev === initial ? d : prev));
+    setQuery((prev) => (prev === "BTCX20" || prev === initial ? d : prev));
+  }, [cfg.data?.defaultIndexId, initial]);
 
   return (
     <div className="space-y-4">
@@ -84,26 +120,87 @@ function Explorer() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            setQuery(indexId.trim());
+            setQuery(indexId.trim().toLowerCase());
           }}
           className="flex flex-wrap items-end gap-3"
         >
-          <div className="flex-1 space-y-1.5">
-            <Label className="font-mono text-[10px] uppercase tracking-widest">Index ID</Label>
-            <Input value={indexId} onChange={(e) => setIndexId(e.target.value)} placeholder="e.g. BTCX20" />
+          <div className="min-w-[12rem] flex-1 space-y-1.5">
+            <Label className="font-mono text-[10px] uppercase tracking-widest">Index ticker</Label>
+            <Input
+              value={indexId}
+              onChange={(e) => setIndexId(e.target.value)}
+              placeholder="ssimag7"
+            />
           </div>
           <Button type="submit">Load</Button>
         </form>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {defaults.slice(0, 8).map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setIndexId(id);
+                setQuery(id);
+              }}
+              className={
+                "rounded-md border px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors " +
+                (query === id
+                  ? "border-accent-1/50 bg-accent-1/10 text-foreground"
+                  : "border-border/60 text-muted-foreground hover:border-border hover:text-foreground")
+              }
+            >
+              {id}
+            </button>
+          ))}
+        </div>
       </Panel>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Stat label="NAV" value={snap.isLoading ? "…" : usd(snap.data?.nav)} hint={query} />
-        <Stat label="AUM" value={snap.isLoading ? "…" : usd(snap.data?.aum, { compact: true })} />
-        <Stat label="Change 24h" value={snap.isLoading ? "…" : `${num(snap.data?.change24h, 2)}%`} />
-      </div>
+      {snap.isError ? (
+        <Panel className="p-6">
+          <EmptyState
+            icon={<LayoutGrid className="h-6 w-6" />}
+            title="Snapshot unavailable"
+            description={(snap.error as Error).message}
+          />
+        </Panel>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Stat label="NAV / price" value={snap.isLoading ? "…" : usd(snap.data?.nav)} hint={query} />
+          <Stat
+            label="AUM"
+            value={
+              snap.isLoading
+                ? "…"
+                : snap.data?.aum != null
+                  ? usd(snap.data.aum, { compact: true })
+                  : "Unavailable"
+            }
+            hint={snap.data?.note ?? "Not always in market-snapshot"}
+          />
+          <Stat
+            label="Change 24h"
+            value={
+              snap.isLoading
+                ? "…"
+                : snap.data?.change24h != null
+                  ? `${num(snap.data.change24h, 2)}%`
+                  : "—"
+            }
+          />
+        </div>
+      )}
 
       <Panel>
-        <PanelHeader title="Constituents" description={`${query} · SoSoValue`} />
+        <PanelHeader
+          title="Constituents"
+          description={`${query} · SoSoValue`}
+          action={
+            <Link to="/app/trading" className="text-xs text-muted-foreground hover:text-foreground">
+              Trade proxies on SoDEX →
+            </Link>
+          }
+        />
         {cons.isLoading ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 6 }).map((_, i) => (

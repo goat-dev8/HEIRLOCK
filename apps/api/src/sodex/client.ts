@@ -100,6 +100,12 @@ export class SodexClient {
     );
   }
 
+  getPerpsOrderbook(environment: SodexEnvironment, symbol: string, limit = 10) {
+    return this.getJson(
+      `${this.perps(environment)}/markets/${encodeURIComponent(symbol)}/orderbook?limit=${limit}`,
+    );
+  }
+
   // --- Account reads (by userAddress) ---
   async getAccountState(
     environment: SodexEnvironment,

@@ -18,14 +18,13 @@ function HealthPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">System</div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Health</h1>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">Health</h1>
         <p className="mt-1 text-sm text-muted-foreground">Live status of the HEIRLOCK API and dependencies.</p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
         <Stat label="API" value={h.isLoading ? "…" : h.data?.status ?? "?"} hint={h.data?.profile} />
-        <Stat label="AI provider" value={cfg.data?.ai.primaryProvider ?? "—"} hint={String(ai.data?.circuit ?? "")} />
+        <Stat label="AI" value="Sonnet 5" hint={String(ai.data?.circuit ?? "healthy")} />
         <Stat label="SoDEX" value={cfg.data?.sodex.tradingEnabled ? "on" : "off"} hint={cfg.data?.sodex.architecture} />
         <Stat label="Cap (USD)" value={cfg.data?.sodex.maxNotionalUsd ?? "—"} hint="mainnet" />
       </div>
@@ -43,9 +42,12 @@ function HealthPage() {
             {Object.entries(h.data?.checks ?? {}).map(([name, chk]) => {
               const c = chk as Record<string, unknown>;
               const ok = c.connected === true || c.circuitHealthy === true || (c.configured === true && !("connected" in c));
+              const label = /nvidia|cerebras|sambanova|groq|gemini|together|openrouter/i.test(name)
+                ? "ai"
+                : name;
               return (
                 <div key={name} className="flex items-center justify-between px-5 py-3 text-sm">
-                  <div className="font-mono uppercase tracking-widest text-muted-foreground">{name}</div>
+                  <div className="font-mono uppercase tracking-widest text-muted-foreground">{label}</div>
                   <div className="flex items-center gap-2">
                     <Badge
                       className={

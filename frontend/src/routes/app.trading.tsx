@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useNetwork } from "@/lib/network-store";
 import { useSodexSymbols, useSodexOrderbook, useSodexAccount, useSodexGateways, useVerifySodexAccount } from "@/lib/api-hooks";
 import { api } from "@/lib/api";
@@ -34,12 +34,19 @@ function TradingPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Execution</div>
-          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Trading</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Trading</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Non-custodial SoDEX relay. Every order is EIP-712 signed by your wallet.
+            Non-custodial SoDEX relay. Prices from official tickers (`lastPx`). Orders are EIP-712
+            signed by your wallet.
           </p>
         </div>
+      </div>
+      <div className="rounded-lg border border-border/60 bg-surface-1/70 px-4 py-3 text-sm text-muted-foreground">
+        <span className="text-foreground">Flow:</span> verify SoDEX aid → pick market → prepare →
+        sign ExchangeAction → place. Mainnet notional hard-capped.{" "}
+        <Link to="/app/onboarding" className="text-accent-1 hover:underline">
+          Onboarding
+        </Link>
       </div>
       <RequireAuth>
         <TradingWorkspace />
@@ -181,6 +188,7 @@ function TradingWorkspace() {
           market={market}
           network={network}
           cap={cap}
+          lastPrice={active?.price}
         />
       </div>
     </div>
@@ -237,16 +245,27 @@ function OrderTicket({
   market,
   network,
   cap,
+  lastPrice,
 }: {
   symbol?: string;
   symbolID?: number;
   market: "spot" | "perps";
   network: "mainnet" | "testnet";
   cap: number;
+  lastPrice?: number | string;
 }) {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [price, setPrice] = useState("");
   const [size, setSize] = useState("");
+
+  useEffect(() => {
+    if (lastPrice != null && Number(lastPrice) > 0) {
+      setPrice(String(lastPrice));
+    } else {
+      setPrice("");
+    }
+    setSize("");
+  }, [symbol, lastPrice]);
   const [preparing, setPreparing] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [prepared, setPrepared] = useState<{

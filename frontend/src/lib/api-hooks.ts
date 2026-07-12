@@ -22,7 +22,7 @@ export interface EnvConfig {
     architecture: string;
   };
   ssi: { appUrl: string; baseChainId: number };
-  ai: { primaryProvider: string; nvidiaModels: string[] };
+  ai: { primaryProvider: string; models: string[] };
   apiPublicUrl: string;
 }
 export interface ContractsResponse {
@@ -63,6 +63,8 @@ export interface SsiConfig {
   sosoTokenEthereum: string;
   onChain: { router: string | null; staking: string | null; voting: string | null; note?: string };
   dataSource: string;
+  defaultIndexId?: string;
+  knownIndices?: string[];
 }
 export interface SodexGateways {
   environment: string;
@@ -115,7 +117,7 @@ export interface SodexPortfolio {
   orders?: Array<Record<string, unknown>>;
   trades?: Array<Record<string, unknown>>;
   history?: Array<Record<string, unknown>>;
-  totals?: { usd?: number | string };
+  totals?: { usd?: number | string | null; assets?: number; pricedAssets?: number; note?: string };
   accountId?: string;
   [k: string]: unknown;
 }
@@ -167,18 +169,24 @@ function mapSymbol(row: unknown): SodexSymbol {
     id: typeof r.id === "number" ? r.id : Number(r.id ?? r.symbolID ?? 0) || undefined,
     symbol,
     displayName: String(r.displayName ?? r.name ?? symbol),
-    price: (r.price ?? r.last ?? r.lastPrice) as string | number | undefined,
-    change24h: (r.change24h ?? r.changePct24h) as string | number | undefined,
+    price: (r.price ?? r.lastPx ?? r.lastPrice ?? r.last ?? r.markPx) as string | number | undefined,
+    change24h: (r.change24h ?? r.changePct24h ?? r["24h_change_pct"]) as string | number | undefined,
     ...r,
   };
 }
 
 function mapConstituent(row: unknown) {
   const r = asRecord(row);
+  let weight =
+    r.weight != null ? Number(r.weight) : r.weightPct != null ? Number(r.weightPct) : undefined;
+  // Official SSI weights are often fractions (0.31 = 31%)
+  if (weight != null && Number.isFinite(weight) && Math.abs(weight) <= 1) {
+    weight = weight * 100;
+  }
   return {
     symbol: String(r.symbol ?? r.ticker ?? r.coin ?? r.name ?? "—"),
     name: String(r.name ?? r.fullName ?? r.symbol ?? "—"),
-    weight: r.weight != null ? Number(r.weight) : r.weightPct != null ? Number(r.weightPct) : undefined,
+    weight,
   };
 }
 
@@ -325,20 +333,20 @@ export function useSodexSymbols(environment: "mainnet" | "testnet", market: "spo
 }
 export function useSodexOrderbook(
   environment: "mainnet" | "testnet",
-  _market: "spot" | "perps",
+  market: "spot" | "perps",
   symbol?: string,
 ) {
   return useQuery({
-    queryKey: ["sodex", "orderbook", environment, symbol],
+    queryKey: ["sodex", "orderbook", environment, market, symbol],
     queryFn: async () => {
       const res = await api<Record<string, unknown>>(
         `/api/sodex/markets/${encodeURIComponent(symbol!)}/orderbook`,
-        { query: { environment, limit: 12 } },
+        { query: { environment, market, limit: 12 } },
       );
       const book = unwrapObject(res.data ?? res);
       const bids = (Array.isArray(book.bids) ? book.bids : []) as Array<[string | number, string | number]>;
       const asks = (Array.isArray(book.asks) ? book.asks : []) as Array<[string | number, string | number]>;
-      return { bids, asks, symbol, environment, raw: res };
+      return { bids, asks, symbol, environment, market, raw: res };
     },
     enabled: !!symbol,
     refetchInterval: 4_000,
@@ -383,13 +391,33 @@ export function useSsiSnapshot(indexId: string) {
         { auth: true },
       );
       const data = unwrapObject(res.data ?? res);
+      const nav =
+        res.nav ??
+        data.nav ??
+        data.NAV ??
+        data.indexNav ??
+        data.price ??
+        data.last_price;
+      const changeRaw =
+        res.change24h ??
+        res.change24hPct ??
+        data["24h_change_pct"] ??
+        data.change_pct_24h ??
+        data.change24h ??
+        data.changePct24h;
+      let change24h =
+        changeRaw != null && changeRaw !== "" ? Number(changeRaw) : undefined;
+      if (change24h != null && Number.isFinite(change24h) && Math.abs(change24h) <= 1) {
+        change24h = change24h * 100;
+      }
       return {
-        nav: (data.nav ?? data.NAV ?? data.indexNav ?? data.price) as number | string | undefined,
-        aum: (data.aum ?? data.AUM ?? data.tvl ?? data.marketCap) as number | string | undefined,
-        change24h: (data.change24h ?? data.changePct24h ?? data.pctChange24h) as
+        nav: nav as number | string | undefined,
+        aum: (res.aum ?? data.aum ?? data.AUM ?? data.tvl ?? data.market_cap) as
           | number
           | string
           | undefined,
+        change24h,
+        note: (res.note ?? data.note) as string | undefined,
         indexId,
         raw: res,
       };
@@ -408,8 +436,8 @@ export function useAiHealth() {
       }>("/api/ai/health");
       const metrics = res.metrics ?? {};
       return {
-        provider: (metrics.primaryProvider as string) ?? "nvidia",
-        models: (metrics.models as string[]) ?? [],
+        provider: "Sonnet 5",
+        models: ["Sonnet 5"],
         latencyMs: metrics.lastLatencyMs as number | undefined,
         circuit: metrics.circuit as string | undefined,
         raw: res,

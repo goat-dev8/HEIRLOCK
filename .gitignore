@@ -37,6 +37,8 @@ scripts/.render-deploy-state.json
 # ── Internal research / docs (public README only) ────────────────────
 *.md
 !README.md
+!DESIGN.md
+!PROJECT_MEMORY.md
 
 # ── Dependencies ────────────────────────────────────────────────────
 node_modules/

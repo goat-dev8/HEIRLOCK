@@ -92,6 +92,9 @@ export class SoSoValueClient {
   }
 
   // --- Index / SSI ---
+  listIndices(params?: Record<string, string | number>) {
+    return this.get("/indices", params);
+  }
   indexConstituents(indexId: string) {
     return this.get(`/indices/${indexId}/constituents`);
   }

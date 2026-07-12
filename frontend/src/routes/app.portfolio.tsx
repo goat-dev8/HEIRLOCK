@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSodexAccount, useSodexPortfolio, useAuthMe, useVerifySodexAccount } from "@/lib/api-hooks";
 import { useNetwork } from "@/lib/network-store";
 import { env } from "@/lib/env";
@@ -32,12 +32,9 @@ function PortfolioHeader() {
   return (
     <div className="flex items-end justify-between gap-4">
       <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          Wealth · {network}
-        </div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Portfolio</h1>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">Portfolio</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Real balances and orders from your verified SoDEX account. Non-custodial.
+          Live SoDEX balances on {network}. Non-custodial.
         </p>
       </div>
     </div>
@@ -122,15 +119,28 @@ function PortfolioInner() {
   const balances = p.balances ?? [];
   const orders = p.orders ?? [];
   const trades = p.trades ?? [];
-  const totalUsd = p.totals?.usd ?? balances.reduce((s, b) => s + Number(b.usdValue ?? 0), 0);
+  const totals = p.totals as { usd?: number | string | null; note?: string } | undefined;
+  const totalUsd = totals?.usd ?? balances.reduce((s, b) => s + Number(b.usdValue ?? 0), 0);
+  const hasUsd = balances.some((b) => b.usdValue != null) || (totals?.usd != null && Number(totals.usd) > 0);
   const cap = me.data?.wealthPolicy?.maxNotionalUsd ?? 1;
 
   return (
     <div className="space-y-6">
       <div className="grid gap-3 md:grid-cols-3">
-        <Stat label="Portfolio value" value={usd(totalUsd)} hint={`${balances.length} assets`} />
+        <Stat
+          label="Portfolio value"
+          value={hasUsd ? usd(totalUsd) : "Unavailable"}
+          hint={totals?.note ?? `${balances.length} assets · SoDEX lastPx marks`}
+        />
         <Stat label="Open orders" value={orders.length} hint="Signed by your wallet" />
         <Stat label="Policy cap" value={usd(cap)} hint="On-chain WealthPolicy" />
+      </div>
+      <div className="rounded-lg border border-border/60 bg-surface-1/70 px-4 py-3 text-sm text-muted-foreground">
+        <span className="text-foreground">Flow:</span> Enable Trading on SoDEX → Verify aid → balances
+        mark to USD via spot tickers (vUSDC = $1).{" "}
+        <Link to="/app/trading" className="text-accent-1 hover:underline">
+          Trade
+        </Link>
       </div>
 
       <Panel>

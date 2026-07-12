@@ -66,10 +66,10 @@
   --color-accent-2: var(--accent-2);
   --color-success: var(--success);
   --color-warning: var(--warning);
-  --font-display: "Fraunces", "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-display: "Cormorant Garamond", "Times New Roman", ui-serif, Georgia, serif;
   --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --shadow-glow: 0 0 24px -6px oklch(0.72 0.15 240 / 0.55);
+  --shadow-glow: 0 0 28px -8px oklch(0.78 0.14 82 / 0.35);
 }
 
 :root {
@@ -163,6 +163,17 @@
     radial-gradient(60% 50% at 50% 0%, oklch(0.78 0.14 82 / 0.15), transparent 65%),
     radial-gradient(45% 35% at 80% 30%, oklch(0.68 0.16 40 / 0.12), transparent 70%),
     radial-gradient(45% 40% at 15% 60%, oklch(0.68 0.13 220 / 0.12), transparent 70%);
+}
+
+@utility hero-visual-mask {
+  mask-image:
+    linear-gradient(to right, transparent 0%, black 28%, black 100%),
+    linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+  mask-composite: intersect;
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0%, black 28%, black 100%),
+    linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%);
+  -webkit-mask-composite: source-in;
 }
 
 @utility ticker {

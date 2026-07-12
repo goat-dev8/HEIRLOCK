@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAccount } from "wagmi";
 import { useToken } from "@/lib/auth-store";
 import { useAuthMe, useSodexAccount, useVerifySodexAccount } from "@/lib/api-hooks";
@@ -7,11 +7,11 @@ import { env } from "@/lib/env";
 import { Panel } from "@/components/app/panel";
 import { Button } from "@/components/ui/button";
 import { ConnectButton } from "@/components/site/connect-button";
-import { ArrowUpRight, Check, Circle, Compass, Loader2 } from "lucide-react";
+import { ArrowUpRight, Check, Circle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/onboarding")({
-  head: () => ({ meta: [{ title: "Onboarding — HEIRLOCK" }, { name: "robots", content: "noindex" }] }),
+  head: () => ({ meta: [{ title: "Onboarding - HEIRLOCK" }, { name: "robots", content: "noindex" }] }),
   component: OnboardingPage,
 });
 
@@ -25,22 +25,27 @@ function OnboardingPage() {
   const sodexUrl = network === "mainnet" ? env.SODEX.mainnetAppUrl : env.SODEX.testnetAppUrl;
 
   const steps = [
-    { done: isConnected, title: "Connect wallet", body: "Use MetaMask or any injected wallet.", action: <ConnectButton variant="ghost" /> },
+    {
+      done: isConnected,
+      title: "Connect wallet",
+      body: "Use MetaMask or any injected wallet on ValueChain-compatible EVM.",
+      action: <ConnectButton variant="ghost" />,
+    },
     {
       done: !!token,
       title: "Sign in with Ethereum",
-      body: "SIWE creates a scoped session. No custody, no keys shared.",
+      body: "SIWE creates a scoped HEIRLOCK session. No custody. No shared keys.",
       action: !token && isConnected ? <ConnectButton variant="ghost" /> : null,
     },
     {
       done: !!me.data,
-      title: "Load account profile",
-      body: "GET /api/auth/me — includes sodexAccounts + WealthPolicy state.",
+      title: "Load Family Office profile",
+      body: "Wallet session unlocks SoDEX accounts and WealthPolicy state for this address.",
     },
     {
       done: !!account.data?.verified,
       title: `Enable + verify SoDEX (${network})`,
-      body: "Open official SoDEX → Enable Trading → return here and verify so HEIRLOCK stores your aid.",
+      body: "Open official SoDEX → Enable Trading → return and verify so HEIRLOCK stores your aid.",
       action: (
         <div className="flex flex-wrap gap-2">
           <a href={account.data?.enableTradingUrl ?? sodexUrl} target="_blank" rel="noreferrer">
@@ -68,16 +73,52 @@ function OnboardingPage() {
         </div>
       ),
     },
-    { done: false, title: "Run your first research brief", body: "Ask the AI to summarise BTC ETF flows this week." },
-    { done: false, title: "Prepare a capped mainnet or testnet order", body: "Prepare → EIP-712 sign → place. Mainnet notional capped at $1." },
+    {
+      done: false,
+      title: "Read portfolio marks",
+      body: "Balances come from your SoDEX aid. USD uses official spot lastPx (vUSDC = $1).",
+      action: (
+        <Link to="/app/portfolio">
+          <Button size="sm" variant="ghost">
+            Open portfolio
+          </Button>
+        </Link>
+      ),
+    },
+    {
+      done: false,
+      title: "Research + SSI, then trade under policy",
+      body: "Ask Family Office AI, inspect SSI weights (ssimag7), then prepare a capped SoDEX order.",
+      action: (
+        <div className="flex flex-wrap gap-2">
+          <Link to="/app/ai">
+            <Button size="sm" variant="ghost">
+              AI
+            </Button>
+          </Link>
+          <Link to="/app/ssi">
+            <Button size="sm" variant="ghost">
+              SSI
+            </Button>
+          </Link>
+          <Link to="/app/trading">
+            <Button size="sm" variant="ghost">
+              Trading
+            </Button>
+          </Link>
+        </div>
+      ),
+    },
   ];
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Get started</div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Onboarding</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Six steps to a real, personalised HEIRLOCK workspace.</p>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">Onboarding</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          HEIRLOCK is a non-custodial AI Family Office on SoSoValue. Complete these steps once per
+          wallet and environment.
+        </p>
       </div>
 
       <Panel>
@@ -97,20 +138,10 @@ function OnboardingPage() {
               <div className="min-w-0 flex-1">
                 <div className="font-display text-[14px] font-medium">{s.title}</div>
                 <div className="mt-0.5 text-sm text-muted-foreground">{s.body}</div>
+                {s.action ? <div className="mt-3">{s.action}</div> : null}
               </div>
-              {s.action ? <div className="shrink-0">{s.action}</div> : null}
             </div>
           ))}
-        </div>
-      </Panel>
-
-      <Panel tone="accent" className="flex items-start gap-3 p-5">
-        <Compass className="mt-0.5 h-5 w-5 text-accent-1" />
-        <div className="text-sm">
-          <div className="font-medium text-foreground">Recommended path</div>
-          <div className="mt-1 text-muted-foreground">
-            Start on testnet for muscle memory, then flip to mainnet once you're comfortable with prepare → sign → place. Mainnet notional stays capped at $1 while HEIRLOCK is in mainnet-limited profile.
-          </div>
         </div>
       </Panel>
     </div>

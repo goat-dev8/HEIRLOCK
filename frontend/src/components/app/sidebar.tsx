@@ -36,16 +36,16 @@ export function AppSidebar() {
   const groups = Array.from(new Set(NAV.map((n) => n.group)));
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-border/60 bg-surface-0 lg:flex">
-      <div className="flex h-14 items-center px-5">
+    <aside className="hidden w-60 shrink-0 flex-col border-r border-border/50 bg-surface-0 lg:flex">
+      <div className="flex h-14 items-center border-b border-border/40 px-5">
         <Link to="/">
           <Logo />
         </Link>
       </div>
-      <nav className="flex-1 space-y-6 overflow-y-auto px-3 pb-8 pt-2">
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-8 pt-4">
         {groups.map((g) => (
           <div key={g}>
-            <div className="px-3 pb-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
+            <div className="px-3 pb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">
               {g}
             </div>
             <ul className="space-y-0.5">
@@ -57,17 +57,17 @@ export function AppSidebar() {
                     <Link
                       to={n.to}
                       className={cn(
-                        "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-colors",
+                        "group relative flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] transition-colors",
                         active
                           ? "bg-surface-2 text-foreground"
                           : "text-muted-foreground hover:bg-surface-1 hover:text-foreground",
                       )}
                     >
-                      <Icon className={cn("h-4 w-4", active ? "text-accent-1" : "opacity-70")} />
+                      {active ? (
+                        <span className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-accent-1" />
+                      ) : null}
+                      <Icon className={cn("h-4 w-4", active ? "text-accent-1" : "opacity-65")} />
                       <span>{n.label}</span>
-                      {active && (
-                        <span className="ml-auto h-1 w-1 rounded-full bg-accent-1 shadow-[0_0_6px_var(--color-accent-1)]" />
-                      )}
                     </Link>
                   </li>
                 );
@@ -75,11 +75,15 @@ export function AppSidebar() {
             </ul>
           </div>
         ))}
-        <div className="px-3 pt-2 text-[10px] leading-snug text-muted-foreground/60">
-          <div className="mb-1 font-mono uppercase tracking-widest">Ecosystem</div>
+      </nav>
+      <div className="border-t border-border/40 px-5 py-4">
+        <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/50">
+          Ecosystem
+        </div>
+        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground/70">
           SoSoValue · SSI · SoDEX · ValueChain
         </div>
-      </nav>
+      </div>
     </aside>
   );
 }

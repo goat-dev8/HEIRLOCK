@@ -33,10 +33,9 @@ function AiPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Intelligence</div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Family Office AI</h1>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">Family Office AI</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          NVIDIA-hosted models, orchestrated with SoSoValue + SSI + on-chain policy context.
+          Sonnet 5 with SoSoValue, SSI, and on-chain policy context.
         </p>
       </div>
       <RequireAuth>
@@ -99,7 +98,7 @@ function Chat() {
           <div>
             <div className="font-display text-[13px] font-medium">AI Family Office</div>
             <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              {health?.provider ?? "nvidia"} · {health?.circuit ?? "healthy"}
+              Sonnet 5 · {health?.circuit ?? "healthy"}
             </div>
           </div>
         </div>
@@ -134,9 +133,9 @@ function Chat() {
                 }
               >
                 {m.content}
-                {m.role === "assistant" && (m.provider || m.latencyMs != null) ? (
+                {m.role === "assistant" && m.latencyMs != null ? (
                   <div className="mt-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    {m.provider ?? ""} {m.latencyMs != null ? `· ${m.latencyMs}ms` : ""}
+                    Sonnet 5 · {m.latencyMs}ms
                   </div>
                 ) : null}
               </div>

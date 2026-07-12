@@ -9,6 +9,11 @@ import { evaluateTradePolicy, extractNotionalUsd } from "../trading/policy.js";
 import { prepareSpotBatchOrder, preparePerpsOrder } from "../trading/engine.js";
 import { nextSodexNonce } from "./nonce.js";
 import { SodexWsClient } from "./ws.js";
+import {
+  buildSpotPriceMap,
+  enrichBalancesWithUsd,
+  mergeSymbolsWithTickers,
+} from "./mark-to-market.js";
 
 const envSchema = z.enum(["mainnet", "testnet"]);
 
@@ -34,11 +39,18 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
     const environment = (q.environment === "testnet" ? "testnet" : "mainnet") as SodexEnvironment;
     const market = q.market === "perps" ? "perps" : "spot";
     try {
-      const data =
+      const [symbolsRaw, tickersRaw] = await Promise.all([
         market === "perps"
-          ? await ctx.sodex.listPerpsSymbols(environment, q.symbol)
-          : await ctx.sodex.listSymbols(environment, q.symbol);
-      return { environment, market, data };
+          ? ctx.sodex.listPerpsSymbols(environment, q.symbol)
+          : ctx.sodex.listSymbols(environment, q.symbol),
+        market === "perps"
+          ? ctx.sodex.getPerpsTicker(environment, q.symbol).catch(() => null)
+          : ctx.sodex.getTicker(environment, q.symbol).catch(() => null),
+      ]);
+      const data = tickersRaw
+        ? mergeSymbolsWithTickers(symbolsRaw, tickersRaw)
+        : mergeSymbolsWithTickers(symbolsRaw, []);
+      return { environment, market, data, priced: Boolean(tickersRaw) };
     } catch (err) {
       return reply.code(502).send({
         error: err instanceof Error ? err.message : "markets failed",
@@ -46,18 +58,43 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
     }
   });
 
+  app.get("/api/sodex/markets/tickers", async (req, reply) => {
+    const q = req.query as { environment?: string; market?: string; symbol?: string };
+    const environment = (q.environment === "testnet" ? "testnet" : "mainnet") as SodexEnvironment;
+    const market = q.market === "perps" ? "perps" : "spot";
+    try {
+      const data =
+        market === "perps"
+          ? await ctx.sodex.getPerpsTicker(environment, q.symbol)
+          : await ctx.sodex.getTicker(environment, q.symbol);
+      return { environment, market, data, prices: Object.fromEntries(buildSpotPriceMap(data)) };
+    } catch (err) {
+      return reply.code(502).send({
+        error: err instanceof Error ? err.message : "tickers failed",
+      });
+    }
+  });
+
   app.get("/api/sodex/markets/:symbol/orderbook", async (req, reply) => {
     const params = z.object({ symbol: z.string() }).safeParse(req.params);
-    const q = req.query as { environment?: string; limit?: string };
+    const q = req.query as { environment?: string; limit?: string; market?: string };
     if (!params.success) return reply.code(400).send({ error: "symbol required" });
     const environment = (q.environment === "testnet" ? "testnet" : "mainnet") as SodexEnvironment;
+    const market = q.market === "perps" ? "perps" : "spot";
     try {
-      const data = await ctx.sodex.getOrderbook(
-        environment,
-        params.data.symbol,
-        q.limit ? Number(q.limit) : 10,
-      );
-      return { environment, symbol: params.data.symbol, data };
+      const data =
+        market === "perps"
+          ? await ctx.sodex.getPerpsOrderbook(
+              environment,
+              params.data.symbol,
+              q.limit ? Number(q.limit) : 10,
+            )
+          : await ctx.sodex.getOrderbook(
+              environment,
+              params.data.symbol,
+              q.limit ? Number(q.limit) : 10,
+            );
+      return { environment, market, symbol: params.data.symbol, data };
     } catch (err) {
       return reply.code(502).send({
         error: err instanceof Error ? err.message : "orderbook failed",
@@ -181,7 +218,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
     }
 
     try {
-      const [balances, orders, trades, state] = await Promise.all([
+      const [balancesRaw, orders, trades, state, tickersRaw] = await Promise.all([
         ctx.sodex.getBalances(environment, wallet, account.accountId).catch((e) => ({
           error: String(e),
         })),
@@ -190,6 +227,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         })),
         ctx.sodex.getTrades(environment, wallet).catch((e) => ({ error: String(e) })),
         ctx.sodex.getAccountState(environment, wallet).catch((e) => ({ error: String(e) })),
+        ctx.sodex.getTicker(environment).catch(() => null),
       ]);
 
       let orderHistory: unknown = null;
@@ -202,16 +240,35 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         };
       }
 
+      const prices = buildSpotPriceMap(tickersRaw);
+      const marked =
+        tickersRaw && !(balancesRaw as { error?: string }).error
+          ? enrichBalancesWithUsd(balancesRaw, prices)
+          : {
+              balances: balancesRaw,
+              totals: {
+                usd: null,
+                assets: 0,
+                pricedAssets: 0,
+                note: "USD marks unavailable",
+              },
+            };
+
       return {
         environment,
         accountId: account.accountId,
         walletAddress: wallet,
-        balances,
+        balances: marked.balances,
+        totals: marked.totals,
         orders,
         trades,
         orderHistory,
         state,
         portfolioUrl: ctx.sodex.portfolioUrl(environment),
+        pricing: {
+          source: "sodex-spot-tickers-lastPx",
+          tickerCount: prices.size,
+        },
       };
     } catch (err) {
       return reply.code(502).send({

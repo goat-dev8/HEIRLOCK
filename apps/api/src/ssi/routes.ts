@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../app.js";
 import { createRequireWallet } from "../auth/requireWallet.js";
+import { normalizeSsiSnapshot } from "../sodex/mark-to-market.js";
 
 /**
  * SSI Skill data path — index NAV/constituents via SoSoValue OpenAPI.
@@ -23,7 +24,34 @@ export async function registerSsiRoutes(app: FastifyInstance, ctx: AppContext) {
       note: "Null until verified on BaseScan — do not invent",
     },
     dataSource: "sosovalue-openapi-indices",
+    defaultIndexId: "ssimag7",
+    knownIndices: [
+      "ssimag7",
+      "ssidefi",
+      "ssimeme",
+      "ssilayer1",
+      "ssilayer2",
+      "ssiai",
+      "ssirwa",
+      "ssinft",
+      "ssigamefi",
+      "ssidepin",
+      "ssipayfi",
+      "ssicefi",
+      "ssisocialfi",
+    ],
   }));
+
+  app.get("/api/ssi/indices", { preHandler: requireWallet }, async (_req, reply) => {
+    try {
+      const data = await ctx.soso.listIndices();
+      return { data, source: "sosovalue" };
+    } catch (err) {
+      return reply.code(502).send({
+        error: err instanceof Error ? err.message : "SSI indices list failed",
+      });
+    }
+  });
 
   app.get("/api/ssi/indices/:indexId/constituents", { preHandler: requireWallet }, async (req, reply) => {
     const params = z.object({ indexId: z.string().min(1) }).safeParse(req.params);
@@ -42,8 +70,9 @@ export async function registerSsiRoutes(app: FastifyInstance, ctx: AppContext) {
     const params = z.object({ indexId: z.string().min(1) }).safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: params.error.flatten() });
     try {
-      const data = await ctx.soso.indexMarketSnapshot(params.data.indexId);
-      return { indexId: params.data.indexId, data, source: "sosovalue" };
+      const raw = await ctx.soso.indexMarketSnapshot(params.data.indexId);
+      const normalized = normalizeSsiSnapshot(raw, params.data.indexId);
+      return { ...normalized, data: raw, source: "sosovalue" };
     } catch (err) {
       return reply.code(502).send({
         error: err instanceof Error ? err.message : "SSI snapshot failed",
