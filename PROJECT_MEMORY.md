@@ -1,10 +1,10 @@
 # HEIRLOCK — Project Memory
 
-Last updated: 2026-07-12 (Winning plan implementation in progress)
+Last updated: 2026-07-12 (Winning plan shipped `1a54a73`)
 
 ## Mode
 
-Implementing `WINNING_EXECUTION_PLAN.md` (approved). Identity: **AI Financial Operating System on SoSoValue**. Family Office = flagship Skill.
+`WINNING_EXECUTION_PLAN.md` implemented (P0–E core). Pushed to GitHub. Vercel FE redeployed.
 
 ## Live surfaces
 
@@ -15,6 +15,7 @@ Implementing `WINNING_EXECUTION_PLAN.md` (approved). Identity: **AI Financial Op
 | Judges | /app/judges |
 | Living Loop | /app/living |
 | Track | /app/track |
+| SSI Skill | /app/ssi |
 
 ## Completed this session (plan IDs)
 
