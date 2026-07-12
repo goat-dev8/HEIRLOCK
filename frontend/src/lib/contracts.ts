@@ -47,6 +47,19 @@ export const WEALTH_POLICY_ABI = [
 
 export const ACTION_LOG_ABI = [
   { type: "function", name: "length", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  {
+    type: "function",
+    name: "entries",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "uint256" }],
+    outputs: [
+      { name: "actor", type: "address" },
+      { name: "refType", type: "bytes32" },
+      { name: "refId", type: "bytes32" },
+      { name: "ipfsCid", type: "string" },
+      { name: "timestamp", type: "uint256" },
+    ],
+  },
 ] as const;
 
 export const ATTESTATION_ABI = [

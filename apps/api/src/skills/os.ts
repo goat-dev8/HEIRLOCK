@@ -50,7 +50,6 @@ const BUILTIN: SkillDefinition[] = [
       "soso.macro",
       "ssi.snapshot",
       "sodex.portfolio",
-      "sodex.relay",
       "policy.check",
     ],
   },

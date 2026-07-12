@@ -27,13 +27,13 @@ function LivingPage() {
           </div>
           <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Living Loop</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Terminal evidence → proposal → risk preflight → SoDEX act. Why HEIRLOCK: governed OS loop
-            Mosaic simulates and Edgework stops before execution.
+            Terminal evidence → proposal → risk preflight → SoDEX act. Family Office Skill
+            orchestration across SoSoValue, SSI, and SoDEX.
           </p>
         </div>
-        <Link to="/app/judges">
+        <Link to="/app/guide">
           <Button variant="secondary" size="sm">
-            Judge path
+            System guide
           </Button>
         </Link>
       </div>

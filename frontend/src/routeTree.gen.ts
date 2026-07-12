@@ -21,8 +21,8 @@ import { Route as AppResearchRouteImport } from './routes/app.research'
 import { Route as AppPortfolioRouteImport } from './routes/app.portfolio'
 import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
 import { Route as AppLivingRouteImport } from './routes/app.living'
-import { Route as AppJudgesRouteImport } from './routes/app.judges'
 import { Route as AppHealthRouteImport } from './routes/app.health'
+import { Route as AppGuideRouteImport } from './routes/app.guide'
 import { Route as AppContractsRouteImport } from './routes/app.contracts'
 import { Route as AppContinuityRouteImport } from './routes/app.continuity'
 import { Route as AppAiRouteImport } from './routes/app.ai'
@@ -88,14 +88,14 @@ const AppLivingRoute = AppLivingRouteImport.update({
   path: '/living',
   getParentRoute: () => AppRoute,
 } as any)
-const AppJudgesRoute = AppJudgesRouteImport.update({
-  id: '/judges',
-  path: '/judges',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppHealthRoute = AppHealthRouteImport.update({
   id: '/health',
   path: '/health',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGuideRoute = AppGuideRouteImport.update({
+  id: '/guide',
+  path: '/guide',
   getParentRoute: () => AppRoute,
 } as any)
 const AppContractsRoute = AppContractsRouteImport.update({
@@ -126,8 +126,8 @@ export interface FileRoutesByFullPath {
   '/app/ai': typeof AppAiRoute
   '/app/continuity': typeof AppContinuityRoute
   '/app/contracts': typeof AppContractsRoute
+  '/app/guide': typeof AppGuideRoute
   '/app/health': typeof AppHealthRoute
-  '/app/judges': typeof AppJudgesRoute
   '/app/living': typeof AppLivingRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/portfolio': typeof AppPortfolioRoute
@@ -145,8 +145,8 @@ export interface FileRoutesByTo {
   '/app/ai': typeof AppAiRoute
   '/app/continuity': typeof AppContinuityRoute
   '/app/contracts': typeof AppContractsRoute
+  '/app/guide': typeof AppGuideRoute
   '/app/health': typeof AppHealthRoute
-  '/app/judges': typeof AppJudgesRoute
   '/app/living': typeof AppLivingRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/portfolio': typeof AppPortfolioRoute
@@ -166,8 +166,8 @@ export interface FileRoutesById {
   '/app/ai': typeof AppAiRoute
   '/app/continuity': typeof AppContinuityRoute
   '/app/contracts': typeof AppContractsRoute
+  '/app/guide': typeof AppGuideRoute
   '/app/health': typeof AppHealthRoute
-  '/app/judges': typeof AppJudgesRoute
   '/app/living': typeof AppLivingRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/portfolio': typeof AppPortfolioRoute
@@ -188,8 +188,8 @@ export interface FileRouteTypes {
     | '/app/ai'
     | '/app/continuity'
     | '/app/contracts'
+    | '/app/guide'
     | '/app/health'
-    | '/app/judges'
     | '/app/living'
     | '/app/onboarding'
     | '/app/portfolio'
@@ -207,8 +207,8 @@ export interface FileRouteTypes {
     | '/app/ai'
     | '/app/continuity'
     | '/app/contracts'
+    | '/app/guide'
     | '/app/health'
-    | '/app/judges'
     | '/app/living'
     | '/app/onboarding'
     | '/app/portfolio'
@@ -227,8 +227,8 @@ export interface FileRouteTypes {
     | '/app/ai'
     | '/app/continuity'
     | '/app/contracts'
+    | '/app/guide'
     | '/app/health'
-    | '/app/judges'
     | '/app/living'
     | '/app/onboarding'
     | '/app/portfolio'
@@ -332,18 +332,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppLivingRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/judges': {
-      id: '/app/judges'
-      path: '/judges'
-      fullPath: '/app/judges'
-      preLoaderRoute: typeof AppJudgesRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/app/health': {
       id: '/app/health'
       path: '/health'
       fullPath: '/app/health'
       preLoaderRoute: typeof AppHealthRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/guide': {
+      id: '/app/guide'
+      path: '/guide'
+      fullPath: '/app/guide'
+      preLoaderRoute: typeof AppGuideRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/contracts': {
@@ -382,8 +382,8 @@ interface AppRouteChildren {
   AppAiRoute: typeof AppAiRoute
   AppContinuityRoute: typeof AppContinuityRoute
   AppContractsRoute: typeof AppContractsRoute
+  AppGuideRoute: typeof AppGuideRoute
   AppHealthRoute: typeof AppHealthRoute
-  AppJudgesRoute: typeof AppJudgesRoute
   AppLivingRoute: typeof AppLivingRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppPortfolioRoute: typeof AppPortfolioRoute
@@ -401,8 +401,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppAiRoute: AppAiRoute,
   AppContinuityRoute: AppContinuityRoute,
   AppContractsRoute: AppContractsRoute,
+  AppGuideRoute: AppGuideRoute,
   AppHealthRoute: AppHealthRoute,
-  AppJudgesRoute: AppJudgesRoute,
   AppLivingRoute: AppLivingRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppPortfolioRoute: AppPortfolioRoute,

@@ -150,8 +150,8 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       status: "LIVE",
       skill: "family_office",
       mode: "alive",
-      whyHeirlock:
-        "Governed Living Loop on Terminal + SSI + SoDEX — not a signal bot (vs Mosaic sim / Edgework analytics-only).",
+      summary:
+        "Governed Living Loop on Terminal + SSI + SoDEX under Family Office Skill permissions.",
       evidence: {
         etf: etf.ok ? etf.data : null,
         news: news.ok ? news.data : null,
@@ -165,7 +165,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       next: {
         confirmTrading: "/app/trading",
         allocateSsi: ctx.env.SSI_APP_URL,
-        judges: "/app/judges",
+        guide: "/app/guide",
         track: "/app/track",
       },
       ts: at(),
@@ -266,7 +266,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       modules: { etf, news, macro, stocks, treasuries, fundraising },
       actions,
       citations,
-      whyHeirlock: "Cited Terminal brief inside Family Office Skill — not unsourced chat.",
+      summary: "Family Office Brief cites live SoSoValue Terminal modules.",
       ts: new Date().toISOString(),
     };
   });
@@ -317,7 +317,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
         note: "Compare proposals/fills against Terminal index level; token price is separate.",
       },
       rows,
-      whyHeirlock: "Verifiable action log toward Sonar-class /track — Family Office outcomes, not vibes.",
+      summary: "Verifiable Family Office action log with Terminal baseline.",
     };
   });
 
@@ -346,7 +346,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
         allocateUrl: `${ctx.env.SSI_APP_URL.replace(/\/$/, "")}/buy/USSI`,
       },
       note: "Simulation only — ModeController on-chain transition when contracts + policy allow.",
-      whyHeirlock: "Alive→Guardian life-cycle moat Mosaic/Sonar lack.",
+      summary: "Alive → Guardian risk-off path under Continuity Skill.",
       ts: new Date().toISOString(),
       wallet: req.wallet!.address,
     };
@@ -367,7 +367,100 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
         "Software sandbox — not legal advice, not multi-jurisdiction probate. Consult counsel.",
       steps: ["Verify beneficiary binding", "Dispute window", "Release per WealthPolicy", "Tax pack preview"],
       wallet: req.wallet!.address,
-      whyHeirlock: "Estate is a Skill on the OS — not the homepage.",
+      summary: "Estate is a Continuity Skill — available when Heir mode is required.",
     };
+  });
+
+  /** Tool-cited Family Office AI — injects live Terminal brief before answering. */
+  app.post("/api/fo/ai/chat", { preHandler: requireWallet }, async (req, reply) => {
+    const body = z
+      .object({
+        message: z.string().min(1).max(8000),
+      })
+      .safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
+
+    const fo = ctx.skills.permissions.can("family_office", "read", "alive");
+    if (!fo.ok) {
+      return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
+    }
+
+    const citations: Array<{ source: string; endpoint: string; at: string; status: string }> = [];
+    const stamp = (source: string, endpoint: string, status: string) => {
+      citations.push({ source, endpoint, at: new Date().toISOString(), status });
+    };
+
+    let contextBlock = "";
+    try {
+      const etf = await ctx.soso.etfSummaryHistory({
+        symbol: "BTC",
+        country_code: "US",
+        limit: 2,
+      });
+      stamp("etf", "/etfs/summary-history", "LIVE");
+      contextBlock += `\nETF summary-history (BTC US): ${JSON.stringify(etf).slice(0, 1200)}`;
+    } catch {
+      stamp("etf", "/etfs/summary-history", "UNAVAILABLE");
+    }
+    try {
+      const news = await ctx.soso.hotNews({ page: 1, page_size: 3 });
+      stamp("feeds", "/news/hot", "LIVE");
+      contextBlock += `\nHot news: ${JSON.stringify(news).slice(0, 1200)}`;
+    } catch {
+      stamp("feeds", "/news/hot", "UNAVAILABLE");
+    }
+    try {
+      const raw = await ctx.soso.indexMarketSnapshot("ssimag7");
+      const snap = normalizeSsiSnapshot(raw, "ssimag7");
+      stamp("index", "/indices/ssimag7/market-snapshot", "LIVE");
+      contextBlock += `\nssiMAG7 Terminal index level: nav=${snap.nav} change24hPct=${snap.change24h} (index level ≠ MAG7.ssi token price)`;
+    } catch {
+      stamp("index", "/indices/ssimag7/market-snapshot", "UNAVAILABLE");
+    }
+
+    const system = `You are HEIRLOCK Family Office AI on the SoSoValue stack.
+Rules:
+- Only use facts present in CONTEXT below; if missing, say UNAVAILABLE.
+- Cite sources by module name (etf, feeds, index).
+- Never invent SSI contract addresses, balances, or AUM.
+- Refuse legal/tax advice.
+- Be concise.
+
+CONTEXT:${contextBlock || "\n(no live modules — say UNAVAILABLE)"}`;
+
+    try {
+      const res = await ctx.ai.chat({
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: body.data.message },
+        ],
+        thinking: true,
+        maxTokens: 1024,
+      });
+      return {
+        status: "LIVE",
+        provider: res.provider,
+        model: res.model,
+        content: res.content,
+        reasoning: res.reasoning,
+        latencyMs: res.latencyMs,
+        citations: citations.map((c) => ({
+          module: c.source,
+          path: c.endpoint,
+          status: c.status,
+          at: c.at,
+        })),
+      };
+    } catch (err) {
+      return reply.code(502).send({
+        error: err instanceof Error ? err.message : "AI failure",
+        citations: citations.map((c) => ({
+          module: c.source,
+          path: c.endpoint,
+          status: c.status,
+          at: c.at,
+        })),
+      });
+    }
   });
 }

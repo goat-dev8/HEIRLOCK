@@ -32,9 +32,16 @@ function SsiPage() {
             SoSoValue Indexes
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Terminal index analytics in HEIRLOCK. Mint / stake / earn on the official SSI app. Trade
-            proxies on SoDEX. Why HEIRLOCK: dual-source honesty + whitepaper Base contracts — not
-            invented routers.
+            Terminal index analytics in HEIRLOCK. Mint / stake / earn on the{" "}
+            <a
+              href="https://ssi.sosovalue.com/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent-1 underline-offset-2 hover:underline"
+            >
+              official SSI app
+            </a>
+            . Trade proxies on SoDEX.
           </p>
         </div>
         <DataBadge status="LIVE" />

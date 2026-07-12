@@ -34,21 +34,11 @@ scripts/.render-deploy-state.json
 *.7z
 *.rar
 
-# ── Internal research / docs (public README only) ────────────────────
+# ── Markdown: public root README only (all other docs stay local) ───
 *.md
-!README.md
-!DESIGN.md
-!PROJECT_MEMORY.md
-!PRODUCT_AUDIT.md
-!WINNING_EXECUTION_PLAN.md
-!PROJECT_REDESIGN.md
-!IMPLEMENTATION_PLAN.md
-!SETUP_REQUIREMENTS.md
-!HEIRLOCK.md
-!docs/**
-!01_*.md
-!02_*.md
-!03_*.md
+!/README.md
+docs/
+projects.md
 
 # ── Dependencies ────────────────────────────────────────────────────
 node_modules/

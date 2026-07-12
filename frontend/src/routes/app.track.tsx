@@ -22,8 +22,8 @@ function TrackPage() {
         </div>
         <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">/track</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Proposals and fills vs Terminal index baseline. Why HEIRLOCK: Sonar-class verifiability inside
-          the Family Office Skill.
+          Proposals and fills vs Terminal index baseline. Family Office Skill outcomes stay
+          verifiable.
         </p>
       </div>
       <RequireAuth>
@@ -58,7 +58,7 @@ function TrackInner() {
         <PanelHeader title="Action log" description="HIT / STOP / DRIFT / PENDING" />
         {rows.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground">
-            No tracked actions yet. Run Living Loop or Guardian simulate from /judges.
+            No tracked actions yet. Run Living Loop or Guardian simulate from the Guide.
           </div>
         ) : (
           <div className="divide-y divide-border/40">

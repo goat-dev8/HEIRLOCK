@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowUpRight, Brain, Compass, Gavel, Layers, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowUpRight, Brain, Compass, Layers, ShieldCheck, Sparkles } from "lucide-react";
 import { Logo } from "@/components/site/logo";
 import { Button } from "@/components/ui/button";
 import { ConnectButton } from "@/components/site/connect-button";
@@ -132,9 +132,9 @@ function LandingPage() {
                   Enter Living Loop <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Link to="/app/judges">
+              <Link to="/app/guide">
                 <Button size="lg" variant="ghost" className="h-11 px-6 text-foreground">
-                  <Gavel className="mr-2 h-4 w-4" /> Judge path
+                  <Compass className="mr-2 h-4 w-4" /> System guide
                 </Button>
               </Link>
             </div>

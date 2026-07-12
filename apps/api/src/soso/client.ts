@@ -218,6 +218,7 @@ export class SoSoValueClient {
 
         this.monthlyCount += 1;
         this.cache.set(cacheKey, { value: body, expiresAt: Date.now() + cacheTtlMs });
+        this.pruneCache();
         return body;
       } catch (err) {
         lastErr = err;
@@ -233,6 +234,21 @@ export class SoSoValueClient {
 
   private rotateKey() {
     this.keyIndex = (this.keyIndex + 1) % this.keys.length;
+  }
+
+  /** Drop expired entries; cap size so Living Loop / Brief do not balloon memory under quota pressure. */
+  private pruneCache(maxEntries = 200) {
+    const now = Date.now();
+    for (const [k, v] of this.cache) {
+      if (v.expiresAt <= now) this.cache.delete(k);
+    }
+    if (this.cache.size <= maxEntries) return;
+    const overflow = this.cache.size - maxEntries;
+    let i = 0;
+    for (const k of this.cache.keys()) {
+      this.cache.delete(k);
+      if (++i >= overflow) break;
+    }
   }
 
   private async acquirePermit(): Promise<void> {

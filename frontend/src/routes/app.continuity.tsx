@@ -165,12 +165,140 @@ function ContinuityPage() {
               &nbsp;are called on ModeController by the addresses authorised in your WealthPolicy. Estate
               transitions have real-world legal implications — HEIRLOCK does not provide legal advice.
             </div>
-            <div className="mt-3">
+            <div className="mt-3 flex flex-wrap gap-3">
               <GuardianSimulateButton />
+              <EstateSandboxPanel />
             </div>
           </div>
         </div>
       </Panel>
+
+      <ActionLogExplorer
+        address={cfg.addresses.actionLog}
+        explorer={cfg.explorer}
+        chainId={cfg.chainId}
+        length={Number(actionLen.data ?? 0)}
+      />
+    </div>
+  );
+}
+
+function isValueChainTxHash(value: string | undefined): value is `0x${string}` {
+  return !!value && /^0x[a-fA-F0-9]{64}$/.test(value);
+}
+
+function ActionLogExplorer({
+  address,
+  explorer,
+  chainId,
+  length,
+}: {
+  address: `0x${string}`;
+  explorer: string;
+  chainId: number;
+  length: number;
+}) {
+  const start = Math.max(0, length - 5);
+  const indexes = Array.from({ length: Math.min(5, length) }, (_, i) => start + i);
+  const rows = useReadContracts({
+    contracts: indexes.map((i) => ({
+      address,
+      abi: ACTION_LOG_ABI,
+      functionName: "entries" as const,
+      args: [BigInt(i)] as const,
+      chainId,
+    })),
+    query: { enabled: length > 0 },
+  });
+
+  return (
+    <Panel>
+      <PanelHeader
+        title="ActionLog explorer"
+        description="ValueChain entries only — explorer links for real 0x transaction hashes"
+        action={
+          <a href={`${explorer}/address/${address}`} target="_blank" rel="noreferrer">
+            <Button size="sm" variant="ghost">
+              Contract <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          </a>
+        }
+      />
+      {length === 0 ? (
+        <div className="p-5 text-sm text-muted-foreground">No ActionLog entries yet.</div>
+      ) : (
+        <ul className="divide-y divide-border/40">
+          {indexes.map((idx, i) => {
+            const row = rows.data?.[i]?.result as
+              | readonly [string, string, string, string, bigint]
+              | undefined;
+            const cid = row?.[3];
+            const ts = row?.[4] != null ? Number(row[4]) * 1000 : undefined;
+            return (
+              <li key={idx} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                <div className="min-w-0">
+                  <div className="font-mono text-[11px] text-muted-foreground">#{idx}</div>
+                  <div className="truncate font-mono text-xs">{short(row?.[0] as string | undefined)}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {ts ? new Date(ts).toISOString() : "—"}
+                  </div>
+                </div>
+                {isValueChainTxHash(cid) ? (
+                  <a
+                    href={`${explorer}/tx/${cid}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-accent-1 hover:underline"
+                  >
+                    Tx <ArrowUpRight className="h-3 w-3" />
+                  </a>
+                ) : (
+                  <span className="font-mono text-[10px] text-muted-foreground">no 0x tx ref</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function EstateSandboxPanel() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  return (
+    <div className="space-y-2">
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            const { api } = await import("@/lib/api");
+            const res = await api<Record<string, unknown>>("/api/fo/estate/sandbox", { auth: true });
+            setResult(res);
+          } catch (e) {
+            setResult({ error: (e as Error).message });
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        Estate sandbox (SANDBOX)
+      </Button>
+      {result ? (
+        <div className="space-y-1">
+          <Badge variant="outline" className="font-mono text-[10px]">
+            {(result.status as string) ?? "SANDBOX"}
+          </Badge>
+          <p className="text-xs text-muted-foreground">{String(result.disclaimer ?? "")}</p>
+          <pre className="max-h-40 overflow-auto rounded-md border border-border/40 bg-surface-0 p-2 font-mono text-[10px] text-muted-foreground">
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        </div>
+      ) : null}
     </div>
   );
 }

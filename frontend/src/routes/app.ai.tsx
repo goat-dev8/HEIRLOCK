@@ -20,6 +20,7 @@ interface Msg {
   content: string;
   provider?: string;
   latencyMs?: number;
+  citations?: Array<{ module: string; path: string; status: string }>;
 }
 
 const SUGGESTIONS = [
@@ -35,7 +36,7 @@ function AiPage() {
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight">Family Office AI</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Sonnet 5 with SoSoValue, SSI, and on-chain policy context.
+          Tool-cited answers from live SoSoValue Terminal context under the Family Office Skill.
         </p>
       </div>
       <RequireAuth>
@@ -63,23 +64,28 @@ function Chat() {
     setMsgs((m) => [...m, { role: "user", content: text.trim() }]);
     setLoading(true);
     try {
-      const res = await api<{ reply?: string; content?: string; text?: string; provider?: string; model?: string; latencyMs?: number }>(
-        "/api/ai/chat",
-        {
-          method: "POST",
-          auth: true,
-          timeoutMs: 90_000,
-          body: {
-            message: text.trim(),
-            system:
-              "You are HEIRLOCK, an AI Family Office assistant. Be precise, cite SoSoValue/SSI where relevant, respect on-chain policy caps, refuse to give legal or tax advice.",
-          },
-        },
-      );
-      const reply = res.reply ?? res.content ?? res.text ?? JSON.stringify(res);
+      const res = await api<{
+        content?: string;
+        provider?: string;
+        model?: string;
+        latencyMs?: number;
+        citations?: Array<{ module: string; path: string; status: string }>;
+      }>("/api/fo/ai/chat", {
+        method: "POST",
+        auth: true,
+        timeoutMs: 90_000,
+        body: { message: text.trim() },
+      });
+      const reply = res.content ?? "Unavailable";
       setMsgs((m) => [
         ...m,
-        { role: "assistant", content: reply, provider: res.provider ?? res.model, latencyMs: res.latencyMs },
+        {
+          role: "assistant",
+          content: reply,
+          provider: res.provider ?? res.model,
+          latencyMs: res.latencyMs,
+          citations: res.citations,
+        },
       ]);
     } catch (e) {
       toast.error((e as Error).message || "AI request failed");
@@ -98,7 +104,7 @@ function Chat() {
           <div>
             <div className="font-display text-[13px] font-medium">AI Family Office</div>
             <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              Sonnet 5 · {health?.circuit ?? "healthy"}
+              Cited Terminal · {health?.circuit ?? "healthy"}
             </div>
           </div>
         </div>
@@ -133,9 +139,21 @@ function Chat() {
                 }
               >
                 {m.content}
+                {m.role === "assistant" && m.citations && m.citations.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {m.citations.map((c) => (
+                      <span
+                        key={`${c.module}-${c.path}`}
+                        className="rounded border border-border/50 bg-surface-2 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground"
+                      >
+                        {c.module}:{c.status}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 {m.role === "assistant" && m.latencyMs != null ? (
                   <div className="mt-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Sonnet 5 · {m.latencyMs}ms
+                    {m.provider ?? "AI"} · {m.latencyMs}ms
                   </div>
                 ) : null}
               </div>
