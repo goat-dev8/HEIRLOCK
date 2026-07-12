@@ -58,6 +58,7 @@ AI Family Office / Finance OS on SoSoValue. Non-custodial. Per-user SoDEX relay 
 
 - Render API auto-deploys from `main`; restore env via `scripts/restore-render-env.mjs` if PUT wiped secrets
 - Vercel FE: `node scripts/deploy-vercel.mjs` (token: `vercal_token` / `VERCEL_TOKEN`)
+- **Vercel Root Directory must be `frontend`** — Git deploys from monorepo root will fail with `pnpm -r build`
 - Git push: `node scripts/push-github.mjs` (`GITHUB_TOKEN`)
 - CORS/SIWE allow `*.vercel.app` + localhost
 

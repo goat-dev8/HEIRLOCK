@@ -50,9 +50,10 @@ Blueprint: [`render.yaml`](./render.yaml)
 
 ### Web — Vercel
 - **Live:** https://heirlock-os.vercel.app (also https://heirlock-beta.vercel.app)
-- Project: `heirlock` · deploys from `frontend/`
+- Project: `heirlock` · **Root Directory: `frontend`** (required — never build monorepo root)
 - Env: all `VITE_*` keys from `frontend/.env` (synced via `node scripts/deploy-vercel.mjs`)
 - Framework: TanStack Start + Nitro `vercel` preset
+- Install/build: `npm install` / `npm run build` inside `frontend/`
 
 Redeploy:
 ```bash

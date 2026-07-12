@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
  * Deploy HEIRLOCK frontend to Vercel using token from root .env (vercal_token / VERCEL_TOKEN).
- * Sets env from frontend/.env and attaches a clean production domain alias.
+ *
+ * Monorepo rule: Vercel Root Directory MUST stay `frontend` so GitHub deploys
+ * do not run the root `pnpm -r build`. CLI deploys always run from repo ROOT.
  */
-import { execFileSync, execSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -90,7 +92,6 @@ try {
       rootDirectory: "frontend",
       buildCommand: "npm run build",
       installCommand: "npm install",
-      outputDirectory: undefined,
       gitRepository: {
         type: "github",
         repo: "goat-dev8/HEIRLOCK",
@@ -100,18 +101,19 @@ try {
   console.log(JSON.stringify({ step: "project", status: "created", id: project.id, name: project.name }));
 }
 
-// CLI deploys from frontend/ — clear remote rootDirectory so path isn't doubled.
+// Keep Root Directory = frontend for GitHub + CLI (always deploy from monorepo ROOT).
 await api(`/v9/projects/${project.id}${teamQs}`, {
   method: "PATCH",
   body: {
     framework: "tanstack-start",
-    rootDirectory: null,
+    rootDirectory: "frontend",
     buildCommand: "npm run build",
     installCommand: "npm install",
+    nodeVersion: "20.x",
   },
 });
+console.log(JSON.stringify({ step: "project", rootDirectory: "frontend", install: "npm install", build: "npm run build" }));
 
-// Upsert env vars from frontend/.env (production + preview + development)
 const existing = await api(`/v9/projects/${project.id}/env${teamQs}`);
 const existingByKey = new Map((existing.envs || []).map((e) => [e.key, e]));
 
@@ -139,7 +141,7 @@ if (!hasLocalVercel) {
 }
 
 const orgId = project.accountId || teamId || user?.user?.id;
-const vercelDir = resolve(FRONTEND, ".vercel");
+const vercelDir = resolve(ROOT, ".vercel");
 mkdirSync(vercelDir, { recursive: true });
 writeFileSync(
   resolve(vercelDir, "project.json"),
@@ -153,20 +155,18 @@ const deployEnv = {
   VERCEL_PROJECT_ID: project.id,
 };
 
-console.log(JSON.stringify({ step: "deploy", mode: "production", cwd: FRONTEND }));
-execSync("npx vercel deploy --prod --yes --force", {
-  cwd: FRONTEND,
+console.log(JSON.stringify({ step: "deploy", mode: "production", cwd: ROOT, rootDirectory: "frontend" }));
+execSync("npx --prefix frontend vercel deploy --prod --yes --force", {
+  cwd: ROOT,
   stdio: "inherit",
   env: deployEnv,
 });
 
-// Resolve latest production deployment URL
 const deps = await api(`/v6/deployments?projectId=${project.id}&limit=5&target=production${teamQsAmp}`);
 const latest = (deps.deployments || [])[0];
 const prodUrl = latest?.url ? `https://${latest.url}` : null;
 console.log(JSON.stringify({ step: "deployment", url: prodUrl, state: latest?.readyState || latest?.state }));
 
-// Attach the best available *.vercel.app alias
 let attached = null;
 for (const domain of DOMAIN_CANDIDATES) {
   try {
