@@ -28,17 +28,28 @@ function loadEnvFile(path) {
     ) {
       v = v.slice(1, -1);
     }
+    v = v.replace(/^"+|"+$/g, "").replace(/^'+|'+$/g, "");
     out[k] = v;
   }
   return out;
 }
 
-const fileEnv = { ...loadEnvFile(resolve(ROOT, ".env")), ...loadEnvFile(resolve(ROOT, ".env.production")) };
-const env = { ...fileEnv, ...process.env };
+const fileEnv = loadEnvFile(resolve(ROOT, ".env"));
+/** Prefer real .env secrets; never let .env.production placeholders win. */
+const env = {
+  ...process.env,
+  ...fileEnv,
+  RENDER_API_KEY: (fileEnv.RENDER_API_KEY || process.env.RENDER_API_KEY || "").trim(),
+};
 const token = env.RENDER_API_KEY;
 if (!token) {
   console.error("RENDER_API_KEY missing");
   process.exit(2);
+}
+
+function isPlaceholder(v) {
+  const s = String(v ?? "").trim();
+  return !s || /^<REQUEST/i.test(s) || /^YOUR_/i.test(s) || s === "changeme";
 }
 
 const NEVER_UPLOAD = new Set([
@@ -157,7 +168,16 @@ function buildEnvVars(serviceUrl) {
     if (NEVER_UPLOAD.has(key)) continue;
     const value = overrides[key] ?? env[key];
     if (value === undefined || value === null || value === "") continue;
-    envVars.push({ key, value: String(value) });
+    if (isPlaceholder(value)) continue;
+    let v = String(value).replace(/^"+|"+$/g, "").replace(/^'+|'+$/g, "");
+    if (key === "DATABASE_URL" || key === "DIRECT_DATABASE_URL") {
+      if (!/^(postgres|postgresql):\/\//i.test(v)) {
+        throw new Error(
+          `${key} must be postgresql://… before upload (got invalid scheme)`,
+        );
+      }
+    }
+    envVars.push({ key, value: v });
   }
   return envVars;
 }
