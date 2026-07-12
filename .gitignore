@@ -39,6 +39,16 @@ scripts/.render-deploy-state.json
 !README.md
 !DESIGN.md
 !PROJECT_MEMORY.md
+!PRODUCT_AUDIT.md
+!WINNING_EXECUTION_PLAN.md
+!PROJECT_REDESIGN.md
+!IMPLEMENTATION_PLAN.md
+!SETUP_REQUIREMENTS.md
+!HEIRLOCK.md
+!docs/**
+!01_*.md
+!02_*.md
+!03_*.md
 
 # ── Dependencies ────────────────────────────────────────────────────
 node_modules/
