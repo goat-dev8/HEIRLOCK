@@ -266,7 +266,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       modules: { etf, news, macro, stocks, treasuries, fundraising },
       actions,
       citations,
-      summary: "Family Office Brief cites live SoSoValue Terminal modules.",
+      note: "Family Office Brief cites live SoSoValue Terminal modules.",
       ts: new Date().toISOString(),
     };
   });
