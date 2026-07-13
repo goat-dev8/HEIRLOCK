@@ -11,6 +11,7 @@ import {
   basescanAddressUrl,
   basescanTokenUrl,
 } from "./addresses.js";
+import { evaluateSsiDrift } from "./drift.js";
 
 /**
  * SSI Skill — Terminal OpenAPI analytics + whitepaper-verified Base contracts.
@@ -122,6 +123,15 @@ export async function registerSsiRoutes(app: FastifyInstance, ctx: AppContext) {
       const normalized = normalizeSsiSnapshot(raw, params.data.indexId);
       const tokenKey = OPENAPI_TO_TOKEN[params.data.indexId.toLowerCase()];
       const tokenAddress = tokenKey ? SSI_INDEX_TOKENS[tokenKey] : null;
+      const drift =
+        tokenKey && tokenAddress
+          ? await evaluateSsiDrift({
+              indexId: params.data.indexId,
+              tokenSymbol: tokenKey,
+              tokenAddress,
+              terminalChange24hPct: normalized.change24h ?? null,
+            })
+          : null;
       return {
         ...normalized,
         data: raw,
@@ -136,8 +146,11 @@ export async function registerSsiRoutes(app: FastifyInstance, ctx: AppContext) {
               address: tokenAddress,
               basescan: tokenAddress ? basescanTokenUrl(tokenAddress) : null,
               source: SSI_SOURCE.whitepaper,
+              priceUsd: drift?.tokenPriceUsd ?? null,
+              change24hPct: drift?.tokenChange24hPct ?? null,
             }
           : null,
+        drift,
       };
     } catch (err) {
       return reply.code(502).send({

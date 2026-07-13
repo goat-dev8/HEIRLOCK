@@ -105,7 +105,23 @@ function LivingInner() {
   const proposal = (data.proposal as Record<string, unknown>) ?? {};
   const preflight = (data.preflight as { verdict?: string; factors?: Array<Record<string, string>> }) ?? {};
   const index = (data.evidence as { indexSnapshot?: Record<string, unknown> })?.indexSnapshot;
-  const tokenMeta = proposal.onChainToken as { symbol?: string; address?: string; basescan?: string } | null;
+  const tokenMeta = proposal.onChainToken as {
+    symbol?: string;
+    address?: string;
+    basescan?: string;
+    priceUsd?: number | null;
+    change24hPct?: number | null;
+  } | null;
+  const drift = (data.drift ?? proposal.drift) as {
+    alert?: boolean;
+    driftPct?: number | null;
+    signal?: string | null;
+    action?: string;
+    terminalChange24hPct?: number | null;
+    tokenChange24hPct?: number | null;
+    tokenPriceUsd?: number | null;
+    onChain?: { pairUrl?: string | null } | null;
+  } | null;
 
   const verdict = String(preflight.verdict ?? "CAUTION");
   const verdictTone =
@@ -124,6 +140,58 @@ function LivingInner() {
           Refresh
         </Button>
       </div>
+
+      {drift?.alert && drift.signal ? (
+        <Panel className="border-amber-500/40 bg-amber-500/5 p-5">
+          <PanelHeader
+            title="SSI drift signal"
+            description="Terminal index 24h vs on-chain token 24h"
+          />
+          <p className="mt-2 text-sm text-foreground">{drift.signal}</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <Stat
+              label="Terminal 24h"
+              value={pctPoints(drift.terminalChange24hPct)}
+              hint="OpenAPI index"
+            />
+            <Stat
+              label={`${tokenMeta?.symbol ?? "Token"} 24h`}
+              value={pctPoints(drift.tokenChange24hPct)}
+              hint={tokenMeta?.priceUsd != null ? usd(tokenMeta.priceUsd) : "Base market"}
+            />
+            <Stat
+              label="Drift"
+              value={drift.driftPct != null ? `${drift.driftPct.toFixed(1)}%` : "—"}
+              hint="Absolute |Δ|"
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a
+              href={String(proposal.ssiAllocateUrl ?? "https://ssi.sosovalue.com")}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Button size="sm">
+                Allocate on SSI <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
+              </Button>
+            </a>
+            <a
+              href={String(proposal.ssiEarnUrl ?? "https://ssi.sosovalue.com/earn")}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Button size="sm" variant="secondary">
+                Stake / earn <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
+              </Button>
+            </a>
+            <Link to="/app/wealth" search={{ tab: "trade" }}>
+              <Button size="sm" variant="ghost">
+                Trade proxy on SoDEX
+              </Button>
+            </Link>
+          </div>
+        </Panel>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-3">
         <Stat
