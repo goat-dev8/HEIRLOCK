@@ -121,7 +121,7 @@ function buildEnvVars(serviceUrl) {
     HOST: "0.0.0.0",
     LOG_LEVEL: "info",
     HEIRLOCK_DEFAULT_PROFILE: "mainnet-limited",
-    HEIRLOCK_ALLOW_TESTNET: "false",
+    HEIRLOCK_ALLOW_TESTNET: env.HEIRLOCK_ALLOW_TESTNET === "false" || env.HEIRLOCK_ALLOW_TESTNET === false ? "false" : "true",
     TRADING_ENABLED: "true",
     KILL_SWITCH_TRADING: "false",
     TRADING_MAX_NOTIONAL_USD: "1",

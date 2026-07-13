@@ -132,7 +132,7 @@ function LandingPage() {
                   Enter Living Loop <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Link to="/app/wealth">
+              <Link to="/app/wealth" search={{ tab: "holdings" }}>
                 <Button size="lg" variant="ghost" className="h-11 px-6 text-foreground">
                   <Compass className="mr-2 h-4 w-4" /> Open Wealth
                 </Button>

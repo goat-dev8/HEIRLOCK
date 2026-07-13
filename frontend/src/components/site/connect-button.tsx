@@ -1,4 +1,5 @@
-import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
+import { useAccount, useDisconnect, useSignMessage } from "wagmi";
+import { useAppKit } from "@reown/appkit/react";
 import { Button } from "@/components/ui/button";
 import { short } from "@/lib/format";
 import { api, setToken } from "@/lib/api";
@@ -41,22 +42,16 @@ function buildSiweMessage(params: {
 
 export function ConnectButton({ variant = "default" }: { variant?: "default" | "ghost" }) {
   const { address, isConnected } = useAccount();
-  const { connectors, connectAsync, isPending } = useConnect();
   const { disconnectAsync } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
+  const { open } = useAppKit();
   const token = useToken();
   const qc = useQueryClient();
   const [signing, setSigning] = useState(false);
 
-  const injected = connectors.find((c) => c.type === "injected") ?? connectors[0];
-
   async function connect() {
     try {
-      if (!injected) {
-        toast.error("No wallet detected. Install MetaMask or a compatible wallet.");
-        return;
-      }
-      await connectAsync({ connector: injected });
+      await open({ view: "Connect" });
     } catch (e) {
       toast.error((e as Error).message || "Wallet connection failed");
     }
@@ -104,8 +99,8 @@ export function ConnectButton({ variant = "default" }: { variant?: "default" | "
 
   if (!isConnected) {
     return (
-      <Button variant={variant} onClick={connect} disabled={isPending}>
-        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wallet className="mr-2 h-4 w-4" />}
+      <Button variant={variant} onClick={connect}>
+        <Wallet className="mr-2 h-4 w-4" />
         Connect wallet
       </Button>
     );
@@ -136,6 +131,9 @@ export function ConnectButton({ variant = "default" }: { variant?: "default" | "
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="font-mono text-[11px] break-all">{address}</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => open({ view: "Account" })}>
+          <Wallet className="mr-2 h-4 w-4" /> Wallet
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={logout}>
           <LogOut className="mr-2 h-4 w-4" /> Disconnect
         </DropdownMenuItem>

@@ -1,5 +1,3 @@
-import { http, createConfig } from "wagmi";
-import { injected } from "wagmi/connectors";
 import type { Chain } from "viem";
 import { env } from "./env";
 
@@ -24,18 +22,4 @@ export const valuechainTestnet: Chain = {
   testnet: true,
 };
 
-export const wagmiConfig = createConfig({
-  chains: [valuechainMainnet, valuechainTestnet],
-  connectors: [injected({ shimDisconnect: true })],
-  transports: {
-    [valuechainMainnet.id]: http(env.VALUECHAIN.mainnet.rpc),
-    [valuechainTestnet.id]: http(env.VALUECHAIN.testnet.rpc),
-  },
-  ssr: true,
-});
-
-declare module "wagmi" {
-  interface Register {
-    config: typeof wagmiConfig;
-  }
-}
+export const heirlockNetworks = [valuechainMainnet, valuechainTestnet] as const;
