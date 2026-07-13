@@ -291,7 +291,7 @@ function LandingPage() {
             >
               Explorer
             </a>
-            <Link to="/app/health" className="hover:text-foreground">
+            <Link to="/status" className="hover:text-foreground">
               Status
             </Link>
           </div>
