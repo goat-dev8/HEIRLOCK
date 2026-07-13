@@ -5,6 +5,8 @@
 import type { SodexClient, SodexEnvironment } from "./client.js";
 import { prisma } from "../db.js";
 import { updateTrackOutcome } from "../fo/track.js";
+import { loadEnv } from "@heirlock/config";
+import { anchorConfirmedFill } from "../valuechain/action-log.js";
 
 export type FillStatus =
   | "filled"
@@ -294,6 +296,15 @@ export async function applyFillEvidence(opts: {
       orderId: opts.signedOrderId,
       relayId: evidence.sodexOrderId,
       outcome: evidence.status === "filled" ? "HIT" : "PENDING",
+    }).catch(() => undefined);
+
+    // Async-safe on-chain ActionLog — never fail the fill path
+    await anchorConfirmedFill({
+      env: loadEnv(),
+      network: opts.environment === "testnet" ? "testnet" : "mainnet",
+      signedOrderId: opts.signedOrderId,
+      wallet: opts.wallet,
+      evidence,
     }).catch(() => undefined);
   }
 }
