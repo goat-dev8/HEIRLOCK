@@ -34,9 +34,9 @@ test("nonce is monotonic", async () => {
   assert.ok(b > a);
 });
 
-test("prepareSpotBatchOrder blocks mainnet over cap", () => {
+test("prepareSpotBatchOrder blocks mainnet over cap", async () => {
   const env = loadEnv();
-  const r = prepareSpotBatchOrder(env, {
+  const r = await prepareSpotBatchOrder(env, {
     environment: "mainnet",
     accountID: 1,
     symbolID: 1,
@@ -48,6 +48,7 @@ test("prepareSpotBatchOrder blocks mainnet over cap", () => {
     wallet: env.SODEX_ADDRESS ?? "0x0000000000000000000000000000000000000001",
   });
   assert.equal(r.ok, false);
+});
 });
 
 test("SoDEX WS connects and receives on testnet", async () => {

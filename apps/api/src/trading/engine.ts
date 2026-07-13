@@ -17,7 +17,7 @@ import {
 } from "@heirlock/sodex-signing";
 import type { SodexClient, SodexEnvironment } from "../sodex/client.js";
 import { nextSodexNonce } from "../sodex/nonce.js";
-import { evaluateTradePolicy, extractNotionalUsd } from "./policy.js";
+import { evaluateTradePolicyWithChain, extractNotionalUsd } from "./policy.js";
 
 export type PrepareSpotOrderInput = {
   environment: SodexEnvironment;
@@ -38,18 +38,23 @@ export type PrepareSpotOrderInput = {
  * Build official batchNewOrder params + policy check (no private key required).
  * Client signs EIP-712 and posts to /api/sodex/orders/place.
  */
-export function prepareSpotBatchOrder(env: Env, input: PrepareSpotOrderInput) {
+export async function prepareSpotBatchOrder(env: Env, input: PrepareSpotOrderInput) {
   const notional =
     input.notionalUsd ??
     extractNotionalUsd({ funds: input.funds, quantity: input.quantity, price: input.price });
 
-  const policy = evaluateTradePolicy(env, {
+  const policy = await evaluateTradePolicyWithChain(env, {
     wallet: input.wallet,
     notionalUsd: notional,
     environment: input.environment,
   });
   if (!policy.ok) {
-    return { ok: false as const, reason: policy.reason, effectiveCapUsd: policy.effectiveCapUsd };
+    return {
+      ok: false as const,
+      reason: policy.reason,
+      effectiveCapUsd: policy.effectiveCapUsd,
+      onChain: policy.onChain,
+    };
   }
 
   const params = buildSpotBatchNewOrderParams({
@@ -100,7 +105,7 @@ export async function signAndPlaceSpotOrder(input: {
   clOrdID?: string;
   notionalUsd?: number;
 }) {
-  const prepared = prepareSpotBatchOrder(input.env, {
+  const prepared = await prepareSpotBatchOrder(input.env, {
     environment: input.environment,
     accountID: input.accountID,
     symbolID: input.symbolID,
@@ -217,18 +222,23 @@ export type PreparePerpsOrderInput = {
  * Build official perps newOrder params + policy check.
  * Client signs under EIP-712 domain name "futures".
  */
-export function preparePerpsOrder(env: Env, input: PreparePerpsOrderInput) {
+export async function preparePerpsOrder(env: Env, input: PreparePerpsOrderInput) {
   const notional =
     input.notionalUsd ??
     extractNotionalUsd({ funds: input.funds, quantity: input.quantity, price: input.price });
 
-  const policy = evaluateTradePolicy(env, {
+  const policy = await evaluateTradePolicyWithChain(env, {
     wallet: input.wallet,
     notionalUsd: notional,
     environment: input.environment,
   });
   if (!policy.ok) {
-    return { ok: false as const, reason: policy.reason, effectiveCapUsd: policy.effectiveCapUsd };
+    return {
+      ok: false as const,
+      reason: policy.reason,
+      effectiveCapUsd: policy.effectiveCapUsd,
+      onChain: policy.onChain,
+    };
   }
 
   const params = buildPerpsNewOrderParams({
@@ -285,7 +295,7 @@ export async function signAndPlacePerpsOrder(input: {
   positionSide?: string | number;
   notionalUsd?: number;
 }) {
-  const prepared = preparePerpsOrder(input.env, {
+  const prepared = await preparePerpsOrder(input.env, {
     environment: input.environment,
     accountID: input.accountID,
     symbolID: input.symbolID,

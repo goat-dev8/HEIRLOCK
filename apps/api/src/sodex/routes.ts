@@ -5,7 +5,7 @@ import type { AppContext } from "../app.js";
 import { createRequireWallet } from "../auth/requireWallet.js";
 import { prisma } from "../db.js";
 import type { SodexEnvironment } from "./client.js";
-import { evaluateTradePolicy, extractNotionalUsd } from "../trading/policy.js";
+import { evaluateTradePolicyWithChain, extractNotionalUsd } from "../trading/policy.js";
 import { prepareSpotBatchOrder, preparePerpsOrder } from "../trading/engine.js";
 import { nextSodexNonce } from "./nonce.js";
 import { SodexWsClient } from "./ws.js";
@@ -324,7 +324,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
 
     const prepared =
       parsed.data.market === "perps"
-        ? preparePerpsOrder(ctx.env, {
+        ? await preparePerpsOrder(ctx.env, {
             environment: parsed.data.environment,
             accountID: account.accountId,
             symbolID: parsed.data.symbolID,
@@ -341,7 +341,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
             notionalUsd: parsed.data.notionalUsd,
             wallet,
           })
-        : prepareSpotBatchOrder(ctx.env, {
+        : await prepareSpotBatchOrder(ctx.env, {
             environment: parsed.data.environment,
             accountID: account.accountId,
             symbolID: parsed.data.symbolID,
@@ -357,7 +357,12 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
           });
 
     if (!prepared.ok) {
-      return reply.code(403).send(prepared);
+      return reply.code(403).send({
+        error: "policy_blocked",
+        reason: prepared.reason,
+        effectiveCapUsd: prepared.effectiveCapUsd,
+        onChain: prepared.onChain ?? null,
+      });
     }
 
     const nonce = await nextSodexNonce(wallet);
@@ -411,7 +416,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
     const wallet = req.wallet!.address;
     const notionalUsd =
       parsed.data.notionalUsd ?? extractNotionalUsd(parsed.data.params);
-    const policy = evaluateTradePolicy(ctx.env, {
+    const policy = await evaluateTradePolicyWithChain(ctx.env, {
       wallet,
       notionalUsd,
       environment: parsed.data.environment,
@@ -421,6 +426,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         error: "policy_blocked",
         reason: policy.reason,
         effectiveCapUsd: policy.effectiveCapUsd,
+        onChain: policy.onChain ?? null,
       });
     }
 
@@ -585,7 +591,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
     }
 
     const notionalUsd = extractNotionalUsd(parsed.data.body);
-    const policy = evaluateTradePolicy(ctx.env, {
+    const policy = await evaluateTradePolicyWithChain(ctx.env, {
       wallet: signer,
       notionalUsd,
       environment: parsed.data.environment,
@@ -595,6 +601,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         error: "policy_blocked",
         reason: policy.reason,
         effectiveCapUsd: policy.effectiveCapUsd,
+        onChain: policy.onChain ?? null,
       });
     }
 

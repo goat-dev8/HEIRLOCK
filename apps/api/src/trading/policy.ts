@@ -1,8 +1,21 @@
 import type { Env } from "@heirlock/config";
+import {
+  readOnChainWealthPolicy,
+  type OnChainWealthPolicy,
+} from "../valuechain/policy-read.js";
 
 export type PolicyDecision =
-  | { ok: true; effectiveCapUsd: number }
-  | { ok: false; reason: string; effectiveCapUsd?: number };
+  | {
+      ok: true;
+      effectiveCapUsd: number;
+      onChain?: OnChainWealthPolicy;
+    }
+  | {
+      ok: false;
+      reason: string;
+      effectiveCapUsd?: number;
+      onChain?: OnChainWealthPolicy;
+    };
 
 export type TradeEnvironment = "mainnet" | "testnet";
 
@@ -70,6 +83,77 @@ export function evaluateTradePolicy(
   }
 
   return { ok: true, effectiveCapUsd };
+}
+
+/**
+ * Apply on-chain WealthPolicy.mode() + maxNotionalUsd on top of env policy.
+ * Guardian / Heir block new risk-taking relays (Phase 4 continuity gate).
+ */
+export function applyOnChainContinuityGate(
+  decision: PolicyDecision,
+  onChain: OnChainWealthPolicy,
+  notionalUsd?: number,
+): PolicyDecision {
+  if (!decision.ok) {
+    return { ...decision, onChain };
+  }
+
+  if (onChain.source === "unavailable") {
+    return {
+      ok: false,
+      reason: "on_chain_wealth_policy_unavailable",
+      effectiveCapUsd: decision.effectiveCapUsd,
+      onChain,
+    };
+  }
+
+  if (onChain.mode === 1) {
+    return {
+      ok: false,
+      reason: "on_chain_mode_guardian_blocks_new_orders",
+      effectiveCapUsd: decision.effectiveCapUsd,
+      onChain,
+    };
+  }
+  if (onChain.mode === 2) {
+    return {
+      ok: false,
+      reason: "on_chain_mode_heir_blocks_execution",
+      effectiveCapUsd: decision.effectiveCapUsd,
+      onChain,
+    };
+  }
+
+  let effectiveCapUsd = decision.effectiveCapUsd;
+  if (onChain.maxNotionalUsd != null && Number.isFinite(onChain.maxNotionalUsd)) {
+    effectiveCapUsd = Math.min(effectiveCapUsd, onChain.maxNotionalUsd);
+  }
+
+  if (notionalUsd != null && notionalUsd > effectiveCapUsd) {
+    return {
+      ok: false,
+      reason: `notional_exceeds_on_chain_cap_${effectiveCapUsd}`,
+      effectiveCapUsd,
+      onChain,
+    };
+  }
+
+  return { ok: true, effectiveCapUsd, onChain };
+}
+
+/** Env policy + live ValueChain WealthPolicy.mode() read before relay/prepare. */
+export async function evaluateTradePolicyWithChain(
+  env: Env,
+  input: {
+    wallet: string;
+    notionalUsd?: number;
+    environment?: TradeEnvironment;
+  },
+): Promise<PolicyDecision> {
+  const base = evaluateTradePolicy(env, input);
+  const network = input.environment ?? "mainnet";
+  const onChain = await readOnChainWealthPolicy(env, network);
+  return applyOnChainContinuityGate(base, onChain, input.notionalUsd);
 }
 
 /** Best-effort notional extraction from heterogeneous SoDEX order bodies. */
