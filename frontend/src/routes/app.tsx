@@ -1,11 +1,12 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { AppSidebar } from "@/components/app/sidebar";
 import { AppTopbar } from "@/components/app/topbar";
+import { FirstRunWizard } from "@/components/app/first-run-wizard";
 
 export const Route = createFileRoute("/app")({
   head: () => ({
     meta: [
-      { title: "HEIRLOCK — Family Office OS" },
+      { title: "HEIRLOCK" },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -23,6 +24,7 @@ function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <FirstRunWizard />
     </div>
   );
 }
