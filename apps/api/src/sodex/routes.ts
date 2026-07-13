@@ -15,6 +15,13 @@ import {
   mergeSymbolsWithTickers,
 } from "./mark-to-market.js";
 import { applyFillEvidence, reconcileFill } from "./fill-proof.js";
+import {
+  getCapability,
+  isBuyable,
+  isCancelOnlyError,
+  recordCancelOnly,
+  recordLiveMatcherOk,
+} from "./capability.js";
 
 const envSchema = z.enum(["mainnet", "testnet"]);
 
@@ -362,6 +369,27 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
     };
   });
 
+  app.get("/api/sodex/markets/capability", { preHandler: requireWallet }, async (req) => {
+    const q = req.query as { environment?: string; symbol?: string };
+    const environment = (q.environment === "testnet" ? "testnet" : "mainnet") as
+      | "mainnet"
+      | "testnet";
+    const symbol = String(q.symbol ?? "").trim();
+    if (!symbol) {
+      return { environment, capability: null, buyable: false, note: "symbol required" };
+    }
+    const capability = await getCapability({ environment, symbol });
+    return {
+      environment,
+      symbol: symbol.toUpperCase(),
+      capability,
+      buyable: isBuyable(capability),
+      note: capability
+        ? "Cached signed capability"
+        : "UNVERIFIED — capability seeds after a signed matcher accept or verified fill",
+    };
+  });
+
   app.post("/api/sodex/orders/place", { preHandler: requireWallet }, async (req, reply) => {
     const parsed = z
       .object({
@@ -473,6 +501,22 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         evidence,
       });
 
+      if (sodexOrderId) {
+        await recordLiveMatcherOk({
+          environment: parsed.data.environment,
+          symbol: order.market !== "unknown" && order.market !== "spot" && order.market !== "perps"
+            ? order.market
+            : "MARKET",
+          filled: evidence.status === "filled" || evidence.status === "partial",
+        }).catch(() => undefined);
+      } else if (evidence.status === "filled" || evidence.status === "partial" || evidence.historyMatch) {
+        await recordLiveMatcherOk({
+          environment: parsed.data.environment,
+          symbol: order.market,
+          filled: true,
+        }).catch(() => undefined);
+      }
+
       return {
         orderId: order.id,
         sodexOrderId,
@@ -489,15 +533,23 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         proofUrl: order.proofUrl,
       };
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isCancelOnlyError(msg)) {
+        await recordCancelOnly({
+          environment: parsed.data.environment,
+          symbol: order.market,
+          reason: msg,
+        }).catch(() => undefined);
+      }
       await prisma.signedOrder.update({
         where: { id: order.id },
         data: {
           status: "failed",
-          errorMessage: err instanceof Error ? err.message : String(err),
+          errorMessage: msg,
         },
       });
       return reply.code(502).send({
-        error: err instanceof Error ? err.message : "Place order failed",
+        error: msg || "Place order failed",
         orderId: order.id,
       });
     }
