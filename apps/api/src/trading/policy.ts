@@ -86,13 +86,16 @@ export function evaluateTradePolicy(
 }
 
 /**
- * Apply on-chain WealthPolicy.mode() + maxNotionalUsd on top of env policy.
- * Guardian / Heir block new risk-taking relays (Phase 4 continuity gate).
+ * Apply on-chain WealthPolicy.mode() (+ optional maxNotionalUsd) on top of env policy.
+ * Guardian / Heir always block new risk-taking relays.
+ * On-chain notional cap applies to mainnet only — testnet uses TESTNET_TEST_MAX_NOTIONAL_USD
+ * (SoDEX testnet has its own minNotional/maxNotional per symbol; guide_sodex_order.md §2).
  */
 export function applyOnChainContinuityGate(
   decision: PolicyDecision,
   onChain: OnChainWealthPolicy,
   notionalUsd?: number,
+  opts?: { applyOnChainNotionalCap?: boolean },
 ): PolicyDecision {
   if (!decision.ok) {
     return { ...decision, onChain };
@@ -125,14 +128,21 @@ export function applyOnChainContinuityGate(
   }
 
   let effectiveCapUsd = decision.effectiveCapUsd;
-  if (onChain.maxNotionalUsd != null && Number.isFinite(onChain.maxNotionalUsd)) {
+  const applyNotional = opts?.applyOnChainNotionalCap !== false;
+  if (
+    applyNotional &&
+    onChain.maxNotionalUsd != null &&
+    Number.isFinite(onChain.maxNotionalUsd)
+  ) {
     effectiveCapUsd = Math.min(effectiveCapUsd, onChain.maxNotionalUsd);
   }
 
   if (notionalUsd != null && notionalUsd > effectiveCapUsd) {
     return {
       ok: false,
-      reason: `notional_exceeds_on_chain_cap_${effectiveCapUsd}`,
+      reason: applyNotional
+        ? `notional_exceeds_on_chain_cap_${effectiveCapUsd}`
+        : `notional_exceeds_cap_${effectiveCapUsd}`,
       effectiveCapUsd,
       onChain,
     };
@@ -153,7 +163,10 @@ export async function evaluateTradePolicyWithChain(
   const base = evaluateTradePolicy(env, input);
   const network = input.environment ?? "mainnet";
   const onChain = await readOnChainWealthPolicy(env, network);
-  return applyOnChainContinuityGate(base, onChain, input.notionalUsd);
+  // Mainnet: mode + on-chain $1-class notional. Testnet: mode only; notional from env.
+  return applyOnChainContinuityGate(base, onChain, input.notionalUsd, {
+    applyOnChainNotionalCap: network === "mainnet",
+  });
 }
 
 /** Best-effort notional extraction from heterogeneous SoDEX order bodies. */

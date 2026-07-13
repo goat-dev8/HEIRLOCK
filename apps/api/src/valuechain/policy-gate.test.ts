@@ -54,3 +54,25 @@ test("unavailable on-chain policy blocks relay", () => {
   assert.equal(d.ok, false);
   if (!d.ok) assert.match(d.reason, /unavailable/);
 });
+
+test("testnet skips on-chain notional cap but still reads mode", () => {
+  const d = applyOnChainContinuityGate(
+    { ok: true, effectiveCapUsd: 100000 },
+    snap({ mode: 0, modeName: "Alive", maxNotionalUsd: 1 }),
+    9,
+    { applyOnChainNotionalCap: false },
+  );
+  assert.equal(d.ok, true);
+  if (d.ok) assert.equal(d.effectiveCapUsd, 100000);
+});
+
+test("mainnet still applies on-chain notional cap", () => {
+  const d = applyOnChainContinuityGate(
+    { ok: true, effectiveCapUsd: 1 },
+    snap({ mode: 0, modeName: "Alive", maxNotionalUsd: 1 }),
+    9,
+    { applyOnChainNotionalCap: true },
+  );
+  assert.equal(d.ok, false);
+  if (!d.ok) assert.match(d.reason, /on_chain_cap/);
+});

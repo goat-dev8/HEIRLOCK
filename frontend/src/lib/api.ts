@@ -77,9 +77,13 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
         const ct = res.headers.get("content-type") || "";
         const data = ct.includes("application/json") ? await res.json().catch(() => null) : await res.text();
         if (!res.ok) {
+          const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+          const err = obj && "error" in obj ? String(obj.error) : "";
+          const reason = obj && "reason" in obj ? String(obj.reason) : "";
           const msg =
-            (data && typeof data === "object" && "error" in data && String((data as { error: unknown }).error)) ||
-            `Request failed (${res.status})`;
+            err && reason
+              ? `${err}: ${reason}`
+              : err || reason || `Request failed (${res.status})`;
           // Retry cold-start / gateway blips
           if ((res.status >= 502 && res.status <= 504) && i < attempts - 1) {
             await new Promise((r) => setTimeout(r, 1500 * (i + 1)));

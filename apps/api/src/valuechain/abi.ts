@@ -34,6 +34,13 @@ export const WEALTH_POLICY_ABI = [
     inputs: [{ name: "next", type: "uint8" }],
     outputs: [],
   },
+  {
+    type: "function",
+    name: "setMaxNotionalUsd",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "next", type: "uint256" }],
+    outputs: [],
+  },
 ] as const;
 
 export const ACTION_LOG_ABI = [
