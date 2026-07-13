@@ -27,6 +27,13 @@ export const WEALTH_POLICY_ABI = [
     inputs: [],
     outputs: [{ type: "address" }],
   },
+  {
+    type: "function",
+    name: "setMode",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "next", type: "uint8" }],
+    outputs: [],
+  },
 ] as const;
 
 export const ACTION_LOG_ABI = [

@@ -70,7 +70,7 @@ function LandingPage() {
         <div className="ml-auto flex items-center gap-2">
           <HealthDot />
           <ConnectButton variant="ghost" />
-          <Link to="/app/portfolio">
+          <Link to="/app/living">
             <Button>
               Launch app <ArrowUpRight className="ml-1.5 h-4 w-4" />
             </Button>
@@ -132,9 +132,9 @@ function LandingPage() {
                   Enter Living Loop <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Link to="/app/guide">
+              <Link to="/app/wealth">
                 <Button size="lg" variant="ghost" className="h-11 px-6 text-foreground">
-                  <Compass className="mr-2 h-4 w-4" /> System guide
+                  <Compass className="mr-2 h-4 w-4" /> Open Wealth
                 </Button>
               </Link>
             </div>
