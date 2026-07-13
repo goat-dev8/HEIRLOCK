@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../app.js";
+import { createRequireWallet } from "../auth/requireWallet.js";
 import { probeDatabase } from "../db.js";
 import { probeRedis } from "../redis.js";
 import {
@@ -12,7 +13,9 @@ import {
 } from "@heirlock/sodex-signing";
 
 export async function registerDiagRoutes(app: FastifyInstance, ctx: AppContext) {
-  app.get("/api/diag", async () => {
+  const requireWallet = createRequireWallet(ctx.env);
+
+  app.get("/api/diag", { preHandler: requireWallet }, async () => {
     const [db, redis, soso] = await Promise.all([
       probeDatabase(),
       probeRedis(),

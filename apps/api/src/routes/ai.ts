@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../app.js";
+import { createRequireWallet } from "../auth/requireWallet.js";
 
 const chatBody = z.object({
   message: z.string().min(1).max(8000),
@@ -10,12 +11,14 @@ const chatBody = z.object({
 });
 
 export async function registerAiRoutes(app: FastifyInstance, ctx: AppContext) {
-  app.get("/api/ai/health", async () => ({
+  const requireWallet = createRequireWallet(ctx.env);
+
+  app.get("/api/ai/health", { preHandler: requireWallet }, async () => ({
     metrics: ctx.ai.getMetrics(),
     logs: ctx.ai.getLogs(20),
   }));
 
-  app.post("/api/ai/chat", async (req, reply) => {
+  app.post("/api/ai/chat", { preHandler: requireWallet }, async (req, reply) => {
     const parsed = chatBody.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.flatten() });

@@ -6,43 +6,22 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../app.js";
 import { createRequireWallet } from "../auth/requireWallet.js";
+import { listTrack, pushTrack } from "../fo/track.js";
+import { canForWallet } from "../skills/persist.js";
 import { normalizeSsiSnapshot } from "../sodex/mark-to-market.js";
 import { OPENAPI_TO_TOKEN, SSI_INDEX_TOKENS, basescanTokenUrl } from "../ssi/addresses.js";
-
-type Outcome = "HIT" | "STOP" | "DRIFT" | "PENDING";
-
-type TrackRow = {
-  id: string;
-  wallet: string;
-  kind: string;
-  thesis: string;
-  symbol?: string;
-  orderId?: string;
-  relayId?: string;
-  createdAt: number;
-  outcome: Outcome;
-  citations: Array<{ source: string; endpoint: string; at: string }>;
-};
-
-const trackStore: TrackRow[] = [];
-
-function pushTrack(row: Omit<TrackRow, "id" | "createdAt" | "outcome"> & { outcome?: Outcome }) {
-  const entry: TrackRow = {
-    ...row,
-    id: `trk_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    createdAt: Date.now(),
-    outcome: row.outcome ?? "PENDING",
-  };
-  trackStore.unshift(entry);
-  if (trackStore.length > 200) trackStore.pop();
-  return entry;
-}
 
 export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext) {
   const requireWallet = createRequireWallet(ctx.env);
 
   app.get("/api/fo/living-loop", { preHandler: requireWallet }, async (req, reply) => {
-    const fo = ctx.skills.permissions.can("family_office", "read", "alive");
+    const fo = await canForWallet(
+      ctx.skills.registry,
+      req.wallet!.address,
+      "family_office",
+      "read",
+      "alive",
+    );
     if (!fo.ok) {
       return reply.code(403).send({
         error: "Family Office Skill disabled — enable it in Skills to run the Living Loop",
@@ -173,7 +152,13 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
   });
 
   app.get("/api/fo/brief", { preHandler: requireWallet }, async (req, reply) => {
-    const fo = ctx.skills.permissions.can("family_office", "read", "alive");
+    const fo = await canForWallet(
+      ctx.skills.registry,
+      req.wallet!.address,
+      "family_office",
+      "read",
+      "alive",
+    );
     if (!fo.ok) return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
 
     const citations: Array<{ source: string; endpoint: string; at: string }> = [];
@@ -286,7 +271,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       })
       .safeParse(req.body);
     if (!body.success) return { error: body.error.flatten() };
-    const row = pushTrack({
+    const row = await pushTrack({
       wallet: req.wallet!.address,
       kind: body.data.kind,
       thesis: body.data.thesis,
@@ -301,7 +286,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
 
   app.get("/api/fo/track", { preHandler: requireWallet }, async (req) => {
     const wallet = req.wallet!.address.toLowerCase();
-    const rows = trackStore.filter((r) => r.wallet.toLowerCase() === wallet);
+    const rows = await listTrack(wallet);
     let indexMark: number | null = null;
     try {
       const raw = await ctx.soso.indexMarketSnapshot("ssimag7");
@@ -322,7 +307,13 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
   });
 
   app.post("/api/fo/guardian/simulate", { preHandler: requireWallet }, async (req) => {
-    const g = ctx.skills.permissions.can("guardian", "propose", "alive");
+    const g = await canForWallet(
+      ctx.skills.registry,
+      req.wallet!.address,
+      "guardian",
+      "propose",
+      "alive",
+    );
     if (!g.ok) {
       return {
         error: "Guardian Skill disabled",
@@ -350,7 +341,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       ts: new Date().toISOString(),
       wallet: req.wallet!.address,
     };
-    pushTrack({
+    await pushTrack({
       wallet: req.wallet!.address,
       kind: "guardian_simulate",
       thesis: "Simulated Guardian risk-off",
@@ -380,7 +371,13 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       .safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
 
-    const fo = ctx.skills.permissions.can("family_office", "read", "alive");
+    const fo = await canForWallet(
+      ctx.skills.registry,
+      req.wallet!.address,
+      "family_office",
+      "read",
+      "alive",
+    );
     if (!fo.ok) {
       return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
     }

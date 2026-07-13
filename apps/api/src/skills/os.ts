@@ -204,10 +204,15 @@ export class PermissionKernel {
     skillId: SkillId,
     permission: SkillPermission,
     mode: WealthMode,
+    /** Per-user enable overrides; when set, replaces builtin `enabled` for that skill. */
+    overrides?: Map<SkillId, boolean>,
   ): { ok: boolean; reason?: string } {
     const skill = this.registry.get(skillId);
     if (!skill) return { ok: false, reason: "unknown_skill" };
-    if (!skill.enabled) return { ok: false, reason: "skill_disabled" };
+    const enabled = overrides?.has(skillId)
+      ? overrides.get(skillId)!
+      : skill.enabled;
+    if (!enabled) return { ok: false, reason: "skill_disabled" };
     if (!skill.modes.includes(mode)) return { ok: false, reason: "mode_blocked" };
     if (!skill.permissions.includes(permission)) {
       return { ok: false, reason: "permission_denied" };

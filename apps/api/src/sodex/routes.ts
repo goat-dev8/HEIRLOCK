@@ -14,6 +14,7 @@ import {
   enrichBalancesWithUsd,
   mergeSymbolsWithTickers,
 } from "./mark-to-market.js";
+import { applyFillEvidence, reconcileFill } from "./fill-proof.js";
 
 const envSchema = z.enum(["mainnet", "testnet"]);
 
@@ -447,18 +448,43 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
             );
 
       const sodexOrderId = extractOrderId(result);
+      // Gateway HTTP success = submitted only — never claim filled here.
       await prisma.signedOrder.update({
         where: { id: order.id },
         data: {
-          status: "accepted",
+          status: "submitted",
           sodexOrderId,
           payloadJson: { request: parsed.data.params, response: result } as object,
         },
       });
 
+      const evidence = await reconcileFill({
+        sodex: ctx.sodex,
+        environment: parsed.data.environment,
+        wallet,
+        sodexOrderId: sodexOrderId ?? null,
+      });
+      await applyFillEvidence({
+        signedOrderId: order.id,
+        userId: account.userId,
+        environment: parsed.data.environment,
+        market,
+        wallet,
+        evidence,
+      });
+
       return {
         orderId: order.id,
         sodexOrderId,
+        status: evidence.status,
+        fillProof: {
+          executedQty: evidence.executedQty,
+          tradeIds: evidence.tradeIds,
+          historyMatch: evidence.historyMatch,
+          tradesMatch: evidence.tradesMatch,
+          balanceChecked: evidence.balanceChecked,
+          note: evidence.note,
+        },
         result,
         proofUrl: order.proofUrl,
       };
@@ -561,14 +587,46 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
           method: parsed.data.method,
         },
       );
+      const sodexOrderId = extractOrderId(result);
       await prisma.signedOrder.update({
         where: { id: order.id },
         data: {
-          status: "accepted",
+          status: "submitted",
+          sodexOrderId,
           payloadJson: { request: parsed.data.body, response: result } as object,
         },
       });
-      return { orderId: order.id, result, proofUrl: order.proofUrl };
+
+      const evidence = await reconcileFill({
+        sodex: ctx.sodex,
+        environment: parsed.data.environment,
+        wallet: signer,
+        sodexOrderId: sodexOrderId ?? null,
+      });
+      await applyFillEvidence({
+        signedOrderId: order.id,
+        userId: account.userId,
+        environment: parsed.data.environment,
+        market: "relay",
+        wallet: signer,
+        evidence,
+      });
+
+      return {
+        orderId: order.id,
+        sodexOrderId,
+        status: evidence.status,
+        fillProof: {
+          executedQty: evidence.executedQty,
+          tradeIds: evidence.tradeIds,
+          historyMatch: evidence.historyMatch,
+          tradesMatch: evidence.tradesMatch,
+          balanceChecked: evidence.balanceChecked,
+          note: evidence.note,
+        },
+        result,
+        proofUrl: order.proofUrl,
+      };
     } catch (err) {
       await prisma.signedOrder.update({
         where: { id: order.id },
@@ -582,6 +640,52 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         orderId: order.id,
       });
     }
+  });
+
+  /** Re-run fill reconciliation for an existing signed order. */
+  app.post("/api/sodex/orders/:id/reconcile", { preHandler: requireWallet }, async (req, reply) => {
+    const params = z.object({ id: z.string().min(1) }).safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "invalid id" });
+
+    const order = await prisma.signedOrder.findUnique({ where: { id: params.data.id } });
+    if (!order) return reply.code(404).send({ error: "order_not_found" });
+    if (order.walletAddress.toLowerCase() !== req.wallet!.address.toLowerCase()) {
+      return reply.code(403).send({ error: "wallet_mismatch" });
+    }
+
+    const evidence = await reconcileFill({
+      sodex: ctx.sodex,
+      environment: order.environment,
+      wallet: order.walletAddress,
+      sodexOrderId: order.sodexOrderId,
+      timeoutMs: 10_000,
+    });
+    await applyFillEvidence({
+      signedOrderId: order.id,
+      userId: order.userId,
+      environment: order.environment,
+      market: order.market,
+      wallet: order.walletAddress,
+      evidence,
+    });
+
+    return {
+      orderId: order.id,
+      status: evidence.status,
+      fillProof: evidence,
+      proofUrl: order.proofUrl,
+    };
+  });
+
+  app.get("/api/sodex/me/orders", { preHandler: requireWallet }, async (req) => {
+    const wallet = req.wallet!.address.toLowerCase();
+    const orders = await prisma.signedOrder.findMany({
+      where: { walletAddress: wallet },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: { trades: true },
+    });
+    return { status: "LIVE", orders };
   });
 
   /** Smoke: connect WS, subscribe trades, wait for one message or timeout */

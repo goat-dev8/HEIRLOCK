@@ -87,7 +87,24 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       where: { walletAddress: address.toLowerCase() },
       create: { walletAddress: address.toLowerCase() },
       update: {},
+      include: { wealthPolicy: true },
     });
+
+    if (!profile.wealthPolicy) {
+      const maxNotional = Math.min(
+        ctx.env.TRADING_MAX_NOTIONAL_USD,
+        ctx.env.MAINNET_TEST_MAX_NOTIONAL_USD,
+        1,
+      );
+      await prisma.wealthPolicy.create({
+        data: {
+          userId: profile.id,
+          mode: "alive",
+          maxNotionalUsd: maxNotional,
+          killSwitch: ctx.env.KILL_SWITCH_TRADING,
+        },
+      });
+    }
 
     const token = await signSession(ctx.env, address);
     return {
