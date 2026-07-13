@@ -9,9 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StatusRouteImport } from './routes/status'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppWealthRouteImport } from './routes/app.wealth'
 import { Route as AppTradingRouteImport } from './routes/app.trading'
 import { Route as AppTrackRouteImport } from './routes/app.track'
 import { Route as AppSsiRouteImport } from './routes/app.ssi'
@@ -28,6 +30,11 @@ import { Route as AppContinuityRouteImport } from './routes/app.continuity'
 import { Route as AppAiRouteImport } from './routes/app.ai'
 import { Route as AppActivityRouteImport } from './routes/app.activity'
 
+const StatusRoute = StatusRouteImport.update({
+  id: '/status',
+  path: '/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/app',
   path: '/app',
@@ -41,6 +48,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWealthRoute = AppWealthRouteImport.update({
+  id: '/wealth',
+  path: '/wealth',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTradingRoute = AppTradingRouteImport.update({
@@ -122,6 +134,7 @@ const AppActivityRoute = AppActivityRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/status': typeof StatusRoute
   '/app/activity': typeof AppActivityRoute
   '/app/ai': typeof AppAiRoute
   '/app/continuity': typeof AppContinuityRoute
@@ -137,10 +150,12 @@ export interface FileRoutesByFullPath {
   '/app/ssi': typeof AppSsiRoute
   '/app/track': typeof AppTrackRoute
   '/app/trading': typeof AppTradingRoute
+  '/app/wealth': typeof AppWealthRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/status': typeof StatusRoute
   '/app/activity': typeof AppActivityRoute
   '/app/ai': typeof AppAiRoute
   '/app/continuity': typeof AppContinuityRoute
@@ -156,12 +171,14 @@ export interface FileRoutesByTo {
   '/app/ssi': typeof AppSsiRoute
   '/app/track': typeof AppTrackRoute
   '/app/trading': typeof AppTradingRoute
+  '/app/wealth': typeof AppWealthRoute
   '/app': typeof AppIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
+  '/status': typeof StatusRoute
   '/app/activity': typeof AppActivityRoute
   '/app/ai': typeof AppAiRoute
   '/app/continuity': typeof AppContinuityRoute
@@ -177,6 +194,7 @@ export interface FileRoutesById {
   '/app/ssi': typeof AppSsiRoute
   '/app/track': typeof AppTrackRoute
   '/app/trading': typeof AppTradingRoute
+  '/app/wealth': typeof AppWealthRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
@@ -184,6 +202,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/status'
     | '/app/activity'
     | '/app/ai'
     | '/app/continuity'
@@ -199,10 +218,12 @@ export interface FileRouteTypes {
     | '/app/ssi'
     | '/app/track'
     | '/app/trading'
+    | '/app/wealth'
     | '/app/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/status'
     | '/app/activity'
     | '/app/ai'
     | '/app/continuity'
@@ -218,11 +239,13 @@ export interface FileRouteTypes {
     | '/app/ssi'
     | '/app/track'
     | '/app/trading'
+    | '/app/wealth'
     | '/app'
   id:
     | '__root__'
     | '/'
     | '/app'
+    | '/status'
     | '/app/activity'
     | '/app/ai'
     | '/app/continuity'
@@ -238,16 +261,25 @@ export interface FileRouteTypes {
     | '/app/ssi'
     | '/app/track'
     | '/app/trading'
+    | '/app/wealth'
     | '/app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  StatusRoute: typeof StatusRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/status': {
+      id: '/status'
+      path: '/status'
+      fullPath: '/status'
+      preLoaderRoute: typeof StatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app': {
       id: '/app'
       path: '/app'
@@ -267,6 +299,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/app/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/wealth': {
+      id: '/app/wealth'
+      path: '/wealth'
+      fullPath: '/app/wealth'
+      preLoaderRoute: typeof AppWealthRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/trading': {
@@ -393,6 +432,7 @@ interface AppRouteChildren {
   AppSsiRoute: typeof AppSsiRoute
   AppTrackRoute: typeof AppTrackRoute
   AppTradingRoute: typeof AppTradingRoute
+  AppWealthRoute: typeof AppWealthRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -412,6 +452,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSsiRoute: AppSsiRoute,
   AppTrackRoute: AppTrackRoute,
   AppTradingRoute: AppTradingRoute,
+  AppWealthRoute: AppWealthRoute,
   AppIndexRoute: AppIndexRoute,
 }
 
@@ -420,6 +461,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  StatusRoute: StatusRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

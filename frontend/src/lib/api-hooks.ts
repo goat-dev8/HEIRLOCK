@@ -146,10 +146,17 @@ function mapBalance(row: unknown) {
   const asset = String(
     r.asset ?? r.coin ?? r.coinName ?? r.symbol ?? r.name ?? r.currency ?? "UNKNOWN",
   );
-  const free = r.free ?? r.available ?? r.avail ?? r.cash ?? 0;
-  const locked = r.locked ?? r.freeze ?? r.frozen ?? 0;
-  const total = r.total ?? r.balance ?? Number(free) + Number(locked);
-  const usdValue = r.usdValue ?? r.usd ?? r.valueUsd ?? r.notionalUsd;
+  const asAmount = (v: unknown): number | string =>
+    typeof v === "number" || typeof v === "string" ? v : 0;
+  const free = asAmount(r.free ?? r.available ?? r.avail ?? r.cash ?? 0);
+  const locked = asAmount(r.locked ?? r.freeze ?? r.frozen ?? 0);
+  const totalRaw = r.total ?? r.balance;
+  const total = asAmount(
+    totalRaw ?? (Number(free) || 0) + (Number(locked) || 0),
+  );
+  const usdRaw = r.usdValue ?? r.usd ?? r.valueUsd ?? r.notionalUsd;
+  const usdValue =
+    typeof usdRaw === "number" || typeof usdRaw === "string" ? usdRaw : undefined;
   return { asset, free, locked, total, usdValue };
 }
 

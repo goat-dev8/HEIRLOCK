@@ -1,9 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useSodexAccount, useSodexPortfolio, useAuthMe, useVerifySodexAccount } from "@/lib/api-hooks";
 import { useNetwork } from "@/lib/network-store";
 import { env } from "@/lib/env";
 import { EmptyState, Panel, PanelHeader, Stat } from "@/components/app/panel";
-import { RequireAuth } from "@/components/app/require-auth";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -12,36 +11,12 @@ import { ArrowUpRight, Wallet, ShieldCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/portfolio")({
-  head: () => ({ meta: [{ title: "Portfolio — HEIRLOCK" }, { name: "robots", content: "noindex" }] }),
-  component: PortfolioPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/app/wealth", search: { tab: "holdings" } });
+  },
 });
 
-function PortfolioPage() {
-  return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <PortfolioHeader />
-      <RequireAuth>
-        <PortfolioInner />
-      </RequireAuth>
-    </div>
-  );
-}
-
-function PortfolioHeader() {
-  const [network] = useNetwork();
-  return (
-    <div className="flex items-end justify-between gap-4">
-      <div>
-        <h1 className="font-display text-3xl font-semibold tracking-tight">Portfolio</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Live SoDEX balances on {network}. Non-custodial.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function PortfolioInner() {
+export function PortfolioInner() {
   const [network] = useNetwork();
   const me = useAuthMe();
   const account = useSodexAccount();
@@ -95,8 +70,8 @@ function PortfolioInner() {
                 {verify.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Verify account
               </Button>
-              <a href="/app/onboarding">
-                <Button variant="ghost">View onboarding</Button>
+              <a href="/app/wealth">
+                <Button variant="ghost">Continue setup</Button>
               </a>
             </div>
           }
@@ -115,11 +90,22 @@ function PortfolioInner() {
     );
   }
 
-  const p = portfolio.data ?? {};
+  const p = (portfolio.data ?? {}) as {
+    balances?: Array<{
+      asset: string;
+      free?: string | number;
+      locked?: string | number;
+      total?: string | number;
+      usdValue?: string | number | null;
+    }>;
+    orders?: unknown[];
+    trades?: unknown[];
+    totals?: { usd?: number | string | null; note?: string };
+  };
   const balances = p.balances ?? [];
   const orders = p.orders ?? [];
   const trades = p.trades ?? [];
-  const totals = p.totals as { usd?: number | string | null; note?: string } | undefined;
+  const totals = p.totals;
   const totalUsd = totals?.usd ?? balances.reduce((s, b) => s + Number(b.usdValue ?? 0), 0);
   const hasUsd = balances.some((b) => b.usdValue != null) || (totals?.usd != null && Number(totals.usd) > 0);
   const cap = me.data?.wealthPolicy?.maxNotionalUsd ?? 1;
@@ -138,7 +124,7 @@ function PortfolioInner() {
       <div className="rounded-lg border border-border/60 bg-surface-1/70 px-4 py-3 text-sm text-muted-foreground">
         <span className="text-foreground">Flow:</span> Enable Trading on SoDEX → Verify aid → balances
         mark to USD via spot tickers (vUSDC = $1).{" "}
-        <Link to="/app/trading" className="text-accent-1 hover:underline">
+        <Link to="/app/wealth" search={{ tab: "trade" }} className="text-accent-1 hover:underline">
           Trade
         </Link>
       </div>
@@ -188,14 +174,86 @@ function PortfolioInner() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel>
           <PanelHeader title="Open orders" description="Live from SoDEX for this wallet." />
-          <div className="p-4 text-sm text-muted-foreground">
-            {orders.length === 0 ? "No open orders." : <pre className="max-h-72 overflow-auto font-mono text-[11px]">{JSON.stringify(orders, null, 2)}</pre>}
+          <div className="overflow-x-auto px-2 py-2">
+            {orders.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">No open orders.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    <th className="px-3 py-2">Market</th>
+                    <th className="px-3 py-2">Side</th>
+                    <th className="px-3 py-2 text-right">Size</th>
+                    <th className="px-3 py-2 text-right">Price</th>
+                    <th className="px-3 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {orders.map((o, i) => {
+                    const row = o as Record<string, unknown>;
+                    const key = String(row.orderID ?? row.orderId ?? row.id ?? i);
+                    return (
+                      <tr key={key} className="tabular-nums">
+                        <td className="px-3 py-2.5 font-mono text-xs">
+                          {String(row.symbol ?? row.market ?? "—")}
+                        </td>
+                        <td className="px-3 py-2.5">{String(row.side ?? "—")}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          {num(row.size as string | number | undefined ?? row.qty as string | number | undefined ?? row.orderQty as string | number | undefined, 6)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          {num(row.price as string | number | undefined ?? row.avgPrice as string | number | undefined ?? row.px as string | number | undefined, 4)}
+                        </td>
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                          {String(row.status ?? row.ordStatus ?? "open")}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </Panel>
         <Panel>
           <PanelHeader title="Recent trades" description="Signed fills, most recent first." />
-          <div className="p-4 text-sm text-muted-foreground">
-            {trades.length === 0 ? "No trades yet." : <pre className="max-h-72 overflow-auto font-mono text-[11px]">{JSON.stringify(trades, null, 2)}</pre>}
+          <div className="overflow-x-auto px-2 py-2">
+            {trades.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">No trades yet.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    <th className="px-3 py-2">Market</th>
+                    <th className="px-3 py-2">Side</th>
+                    <th className="px-3 py-2 text-right">Size</th>
+                    <th className="px-3 py-2 text-right">Price</th>
+                    <th className="px-3 py-2">Id</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {trades.map((t, i) => {
+                    const row = t as Record<string, unknown>;
+                    const key = String(row.tradeID ?? row.tradeId ?? row.id ?? i);
+                    return (
+                      <tr key={key} className="tabular-nums">
+                        <td className="px-3 py-2.5 font-mono text-xs">
+                          {String(row.symbol ?? row.market ?? "—")}
+                        </td>
+                        <td className="px-3 py-2.5">{String(row.side ?? "—")}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          {num(row.size as string | number | undefined ?? row.qty as string | number | undefined ?? row.quantity as string | number | undefined, 6)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">{num(row.price as string | number | undefined ?? row.lastPx as string | number | undefined, 4)}</td>
+                        <td className="max-w-[7rem] truncate px-3 py-2.5 font-mono text-[10px] text-muted-foreground">
+                          {key}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </Panel>
       </div>

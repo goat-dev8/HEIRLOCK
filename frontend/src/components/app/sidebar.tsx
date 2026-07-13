@@ -1,44 +1,114 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/site/logo";
-import {
-  Activity,
-  Brain,
-  Compass,
-  FileSignature,
-  HeartPulse,
-  LayoutGrid,
-  LineChart,
-  Newspaper,
-  Settings as SettingsIcon,
-  Shield,
-  Sparkles,
-  Target,
-  Wallet,
-  Workflow,
-} from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Home, Shield, Wallet, Menu } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-const NAV = [
-  { to: "/app/living", label: "Living Loop", icon: Workflow, group: "OS" },
-  { to: "/app/skills", label: "Skills", icon: Sparkles, group: "OS" },
-  { to: "/app/portfolio", label: "Portfolio", icon: Wallet, group: "Wealth" },
-  { to: "/app/trading", label: "Trading", icon: LineChart, group: "Wealth" },
-  { to: "/app/ssi", label: "SSI", icon: LayoutGrid, group: "Wealth" },
-  { to: "/app/ai", label: "Family Office AI", icon: Brain, group: "Intelligence" },
-  { to: "/app/research", label: "Research", icon: Newspaper, group: "Intelligence" },
-  { to: "/app/continuity", label: "Continuity", icon: Shield, group: "Platform" },
-  { to: "/app/track", label: "Track", icon: Target, group: "Platform" },
-  { to: "/app/activity", label: "Activity", icon: Activity, group: "Platform" },
-  { to: "/app/guide", label: "Guide", icon: Compass, group: "System" },
-  { to: "/app/contracts", label: "Contracts", icon: FileSignature, group: "System" },
-  { to: "/app/health", label: "Health", icon: HeartPulse, group: "System" },
-  { to: "/app/onboarding", label: "Onboarding", icon: Compass, group: "System" },
-  { to: "/app/settings", label: "Settings", icon: SettingsIcon, group: "System" },
+export const PRIMARY_NAV = [
+  {
+    to: "/app/living" as const,
+    label: "Home",
+    description: "Evidence, proposal, outcomes",
+    icon: Home,
+  },
+  {
+    to: "/app/wealth" as const,
+    label: "Wealth",
+    description: "Holdings and trade",
+    icon: Wallet,
+  },
+  {
+    to: "/app/continuity" as const,
+    label: "Continuity",
+    description: "Policy modes and proof",
+    icon: Shield,
+  },
 ] as const;
+
+function NavLinks({
+  pathname,
+  onNavigate,
+}: {
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <ul className="space-y-1">
+      {PRIMARY_NAV.map((n) => {
+        const active =
+          pathname === n.to ||
+          pathname.startsWith(n.to + "/") ||
+          (n.to === "/app/wealth" &&
+            (pathname.startsWith("/app/portfolio") || pathname.startsWith("/app/trading")));
+        const Icon = n.icon;
+        return (
+          <li key={n.to}>
+            <Link
+              to={n.to}
+              onClick={onNavigate}
+              className={cn(
+                "group relative flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors",
+                active
+                  ? "bg-surface-2 text-foreground"
+                  : "text-muted-foreground hover:bg-surface-1 hover:text-foreground",
+              )}
+            >
+              {active ? (
+                <span className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-full bg-accent-1" />
+              ) : null}
+              <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", active ? "text-accent-1" : "opacity-70")} />
+              <span className="min-w-0">
+                <span className="block text-[13px] font-medium leading-none">{n.label}</span>
+                <span className="mt-1 block text-[11px] leading-snug text-muted-foreground/80">
+                  {n.description}
+                </span>
+              </span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function MobileNavTrigger() {
+  const [open, setOpen] = useState(false);
+  const pathname = useRouterState({ select: (r) => r.location.pathname });
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="lg:hidden"
+        aria-label="Open navigation"
+        onClick={() => setOpen(true)}
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="left" className="w-[min(100%,20rem)] border-border/50 bg-surface-0 p-0">
+          <SheetHeader className="border-b border-border/40 px-5 py-4 text-left">
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <Logo />
+            <p className="mt-2 text-xs text-muted-foreground">
+              Cited decisions. Proven trades. Policy continuity.
+            </p>
+          </SheetHeader>
+          <nav className="px-3 py-4">
+            <NavLinks pathname={pathname} onNavigate={() => setOpen(false)} />
+          </nav>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
-  const groups = Array.from(new Set(NAV.map((n) => n.group)));
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border/50 bg-surface-0 lg:flex">
@@ -48,64 +118,36 @@ export function AppSidebar() {
         </Link>
       </div>
       <div className="border-b border-border/40 px-5 py-3">
-        <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/70">
-          Install Skills → Build Your OS
+        <div className="text-[11px] leading-snug text-muted-foreground">
+          Every decision cited. Every trade proven.
         </div>
       </div>
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-8 pt-4">
-        {groups.map((g) => (
-          <div key={g}>
-            <div className="px-3 pb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">
-              {g}
-            </div>
-            <ul className="space-y-0.5">
-              {NAV.filter((n) => n.group === g).map((n) => {
-                const active = pathname === n.to || pathname.startsWith(n.to + "/");
-                const Icon = n.icon;
-                return (
-                  <li key={n.to}>
-                    <Link
-                      to={n.to}
-                      className={cn(
-                        "group relative flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] transition-colors",
-                        active
-                          ? "bg-surface-2 text-foreground"
-                          : "text-muted-foreground hover:bg-surface-1 hover:text-foreground",
-                      )}
-                    >
-                      {active ? (
-                        <span className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-accent-1" />
-                      ) : null}
-                      <Icon className={cn("h-4 w-4", active ? "text-accent-1" : "opacity-65")} />
-                      <span>{n.label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+      <nav className="flex-1 px-3 pb-8 pt-4">
+        <NavLinks pathname={pathname} />
       </nav>
       <div className="border-t border-border/40 px-5 py-4">
-        <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/50">
-          AI Finance OS
-        </div>
         <a
           href="https://ssi.sosovalue.com"
           target="_blank"
           rel="noreferrer"
-          className="mt-2 block text-xs text-muted-foreground hover:text-foreground"
+          className="block text-xs text-muted-foreground hover:text-foreground"
         >
-          SSI app ↗
+          Official SSI app
         </a>
         <a
           href="https://sodex.com"
           target="_blank"
           rel="noreferrer"
-          className="mt-1 block text-xs text-muted-foreground hover:text-foreground"
+          className="mt-1.5 block text-xs text-muted-foreground hover:text-foreground"
         >
-          SoDEX ↗
+          Official SoDEX
         </a>
+        <Link
+          to="/status"
+          className="mt-3 block text-[11px] text-muted-foreground/70 hover:text-foreground"
+        >
+          System status
+        </Link>
       </div>
     </aside>
   );

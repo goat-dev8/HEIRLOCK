@@ -1,10 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useNetwork } from "@/lib/network-store";
 import { useSodexSymbols, useSodexOrderbook, useSodexAccount, useSodexGateways, useVerifySodexAccount } from "@/lib/api-hooks";
 import { api } from "@/lib/api";
 import { EmptyState, Panel, PanelHeader, Stat } from "@/components/app/panel";
-import { RequireAuth } from "@/components/app/require-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,37 +24,12 @@ import {
 } from "@/lib/sodex-sign";
 
 export const Route = createFileRoute("/app/trading")({
-  head: () => ({ meta: [{ title: "Trading — HEIRLOCK" }, { name: "robots", content: "noindex" }] }),
-  component: TradingPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/app/wealth", search: { tab: "trade" } });
+  },
 });
 
-function TradingPage() {
-  return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Trading</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Non-custodial SoDEX relay. Prices from official tickers (`lastPx`). Orders are EIP-712
-            signed by your wallet.
-          </p>
-        </div>
-      </div>
-      <div className="rounded-lg border border-border/60 bg-surface-1/70 px-4 py-3 text-sm text-muted-foreground">
-        <span className="text-foreground">Flow:</span> verify SoDEX aid → pick market → prepare →
-        sign ExchangeAction → place. Mainnet notional hard-capped.{" "}
-        <Link to="/app/onboarding" className="text-accent-1 hover:underline">
-          Onboarding
-        </Link>
-      </div>
-      <RequireAuth>
-        <TradingWorkspace />
-      </RequireAuth>
-    </div>
-  );
-}
-
-function TradingWorkspace() {
+export function TradingWorkspace() {
   const [network] = useNetwork();
   const [market, setMarket] = useState<"spot" | "perps">("spot");
   const symbols = useSodexSymbols(network, market);
@@ -362,6 +336,8 @@ function OrderTicket({
         proofUrl?: string;
         relayId?: string;
         id?: string;
+        status?: string;
+        fillProof?: { note?: string; tradeIds?: string[]; status?: string };
       }>("/api/sodex/orders/place", {
           method: "POST",
           auth: true,
@@ -391,17 +367,29 @@ function OrderTicket({
             kind: "sodex_fill",
             thesis: `${side.toUpperCase()} ${symbol} under Family Office policy`,
             symbol,
-            orderId: sodexOrderId,
-            relayId,
-            outcome: "PENDING",
+            orderId: res.orderId ?? sodexOrderId,
+            relayId: sodexOrderId ?? relayId,
+            outcome: res.status === "filled" ? "HIT" : "PENDING",
           },
         });
       } catch {
         /* track is best-effort */
       }
-      toast.success(
-        `Order accepted${sodexOrderId ? ` · SoDEX ${sodexOrderId}` : ""}`,
-      );
+      if (res.status === "filled") {
+        const tradeN = res.fillProof?.tradeIds?.length ?? 0;
+        toast.success(
+          tradeN > 0
+            ? `Fill verified · ${tradeN} trade(s)${sodexOrderId ? ` · ${sodexOrderId}` : ""}`
+            : `Fill verified${sodexOrderId ? ` · ${sodexOrderId}` : ""}`,
+        );
+      } else if (res.status === "partial") {
+        toast.success(`Partial fill verified${sodexOrderId ? ` · ${sodexOrderId}` : ""}`);
+      } else {
+        toast.message(
+          res.fillProof?.note ??
+            `Submitted${sodexOrderId ? ` · ${sodexOrderId}` : ""} — awaiting fill evidence`,
+        );
+      }
       setPrepared(null);
       setSize("");
     } catch (e) {

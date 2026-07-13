@@ -12,7 +12,7 @@ import { pctPoints, short, usd } from "@/lib/format";
 
 export const Route = createFileRoute("/app/living")({
   head: () => ({
-    meta: [{ title: "Living Loop — HEIRLOCK" }, { name: "robots", content: "noindex" }],
+    meta: [{ title: "Home — HEIRLOCK" }, { name: "robots", content: "noindex" }],
   }),
   component: LivingPage,
 });
@@ -22,18 +22,15 @@ function LivingPage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            Family Office · Flagship Skill
-          </div>
-          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Living Loop</h1>
+          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Home</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Terminal evidence → proposal → risk preflight → SoDEX act. Family Office Skill
-            orchestration across SoSoValue, SSI, and SoDEX.
+            Live SoSoValue evidence, one proposal, deterministic risk, then SSI allocate or SoDEX
+            execute. Outcomes stay verifiable.
           </p>
         </div>
-        <Link to="/app/guide">
+        <Link to="/app/wealth" search={{ tab: "trade" }}>
           <Button variant="secondary" size="sm">
-            System guide
+            Open Wealth
           </Button>
         </Link>
       </div>

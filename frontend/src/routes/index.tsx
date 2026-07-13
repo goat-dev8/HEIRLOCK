@@ -63,7 +63,7 @@ function LandingPage() {
           <a href="#continuity" className="transition-colors hover:text-foreground">
             Continuity
           </a>
-          <Link to="/app/health" className="transition-colors hover:text-foreground">
+          <Link to="/status" className="transition-colors hover:text-foreground">
             Status
           </Link>
         </nav>
