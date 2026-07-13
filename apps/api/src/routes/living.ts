@@ -12,6 +12,8 @@ import { canForWallet } from "../skills/persist.js";
 import { normalizeSsiSnapshot } from "../sodex/mark-to-market.js";
 import { OPENAPI_TO_TOKEN, SSI_INDEX_TOKENS, basescanTokenUrl } from "../ssi/addresses.js";
 import { evaluateSsiDrift } from "../ssi/drift.js";
+import { attestCitationBundle } from "../valuechain/attestation.js";
+import { enterGuardianMode } from "../valuechain/mode.js";
 import { prisma } from "../db.js";
 
 export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext) {
@@ -168,6 +170,19 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
     if (preflight.factors.some((f) => f.status === "block")) preflight.verdict = "BLOCK";
     else if (preflight.factors.some((f) => f.status === "caution")) preflight.verdict = "CAUTION";
 
+    const attestation = await attestCitationBundle({
+      env: ctx.env,
+      network: "mainnet",
+      subjectWallet: req.wallet!.address,
+      citations,
+      proposalAction: String(proposal.action),
+    }).catch((err) => ({
+      contentHash: "",
+      txHash: null as string | null,
+      status: "skipped" as const,
+      reason: err instanceof Error ? err.message : String(err),
+    }));
+
     return {
       status: "LIVE",
       skill: "family_office",
@@ -184,6 +199,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       citations,
       proposal,
       drift,
+      attestation,
       preflight,
       next: {
         confirmTrading: "/app/trading",
@@ -380,7 +396,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
         basescan: basescanTokenUrl(SSI_INDEX_TOKENS.USSI),
         allocateUrl: `${ctx.env.SSI_APP_URL.replace(/\/$/, "")}/buy/USSI`,
       },
-      note: "Simulation only — ModeController on-chain transition when contracts + policy allow.",
+      note: "Simulation only — use POST /api/fo/guardian/enter for on-chain ModeController.enterGuardian().",
       summary: "Alive → Guardian risk-off path under Continuity Skill.",
       ts: new Date().toISOString(),
       wallet: req.wallet!.address,
@@ -393,6 +409,67 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       outcome: "PENDING",
     });
     return sim;
+  });
+
+  /**
+   * Live ModeController.enterGuardian() via dedicated guardian/owner signer.
+   * Never uses the end-user wallet private key.
+   */
+  app.post("/api/fo/guardian/enter", { preHandler: requireWallet }, async (req, reply) => {
+    const g = await canForWallet(
+      ctx.skills.registry,
+      req.wallet!.address,
+      "guardian",
+      "execute",
+      "alive",
+    );
+    if (!g.ok) {
+      return reply.code(403).send({
+        error: "Guardian Skill disabled or execute permission missing",
+        reason: g.reason,
+      });
+    }
+
+    const body = z
+      .object({
+        network: z.enum(["mainnet", "testnet"]).default("mainnet"),
+        confirm: z.literal(true),
+      })
+      .safeParse(req.body ?? {});
+    if (!body.success) {
+      return reply.code(400).send({
+        error: "confirm_required",
+        detail: "Body must include { confirm: true, network?: 'mainnet'|'testnet' }",
+      });
+    }
+
+    const result = await enterGuardianMode(ctx.env, body.data.network);
+    await pushTrack({
+      wallet: req.wallet!.address,
+      kind: "guardian_enter",
+      thesis: result.ok
+        ? `Mode ${result.fromMode} → ${result.toMode}`
+        : `Guardian enter failed: ${result.reason}`,
+      citations: result.txHash
+        ? [{ source: "valuechain", endpoint: result.txHash, at: new Date().toISOString() }]
+        : [],
+      outcome: result.ok ? "HIT" : "STOP",
+      orderId: result.txHash ?? undefined,
+    });
+
+    if (!result.ok) {
+      return reply.code(502).send({
+        status: "FAILED",
+        ...result,
+        note: "Signer must be ModeController owner or guardian; never the user trading key.",
+      });
+    }
+
+    return {
+      status: "LIVE",
+      ...result,
+      note: "WealthPolicy.mode() is now Guardian — SoDEX prepare/place/relay will block new orders.",
+    };
   });
 
   app.get("/api/fo/estate/sandbox", { preHandler: requireWallet }, async (req) => {

@@ -134,6 +134,8 @@ export const envSchema = z.object({
   FEE_COLLECTOR_ADDRESS: optionalString,
   /** Operational signer for ActionLog.record / AttestationRegistry.attest (gas only; not user trading key) */
   VALUECHAIN_ANCHOR_PRIVATE_KEY: optionalString,
+  /** Dedicated ModeController guardian signer — never the end-user trading key */
+  VALUECHAIN_GUARDIAN_PRIVATE_KEY: optionalString,
 
   NVIDIA_API_KEY: optionalString,
   NVIDIA_BASE_URL: z.string().url().default("https://integrate.api.nvidia.com/v1"),

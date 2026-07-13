@@ -22,15 +22,10 @@ import {
 } from "./addresses.js";
 import type { FillEvidence } from "../sodex/fill-proof.js";
 
+import { resolveAnchorPrivateKey } from "./keys.js";
+
 function resolveAnchorKey(env: Env): Hex | null {
-  const raw =
-    env.VALUECHAIN_ANCHOR_PRIVATE_KEY ||
-    process.env.DEPLOYER_PRIVATE_KEY ||
-    "";
-  if (!raw) return null;
-  const hex = (raw.startsWith("0x") ? raw : `0x${raw}`) as Hex;
-  if (hex.length < 66) return null;
-  return hex;
+  return resolveAnchorPrivateKey(env);
 }
 
 export function buildFillEvidenceCid(input: {

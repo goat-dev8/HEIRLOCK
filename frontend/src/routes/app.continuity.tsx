@@ -166,6 +166,7 @@ function ContinuityPage() {
               transitions have real-world legal implications — HEIRLOCK does not provide legal advice.
             </div>
             <div className="mt-3 flex flex-wrap gap-3">
+              <GuardianEnterButton />
               <GuardianSimulateButton />
               <EstateSandboxPanel />
             </div>
@@ -289,14 +290,64 @@ function EstateSandboxPanel() {
         Estate sandbox (SANDBOX)
       </Button>
       {result ? (
-        <div className="space-y-1">
-          <Badge variant="outline" className="font-mono text-[10px]">
+        <div className="rounded-md border border-border/50 bg-surface-0/50 px-3 py-2 text-xs text-muted-foreground">
+          <Badge variant="outline" className="mb-1 font-mono text-[10px]">
             {(result.status as string) ?? "SANDBOX"}
           </Badge>
-          <p className="text-xs text-muted-foreground">{String(result.disclaimer ?? "")}</p>
-          <pre className="max-h-40 overflow-auto rounded-md border border-border/40 bg-surface-0 p-2 font-mono text-[10px] text-muted-foreground">
-            {JSON.stringify(result, null, 2)}
-          </pre>
+          <p>{String(result.disclaimer ?? result.error ?? "")}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function GuardianEnterButton() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  return (
+    <div className="space-y-2">
+      <Button
+        size="sm"
+        disabled={busy}
+        onClick={async () => {
+          if (
+            !window.confirm(
+              "Enter Guardian mode on-chain? New SoDEX orders will be blocked until Alive is restored.",
+            )
+          ) {
+            return;
+          }
+          setBusy(true);
+          try {
+            const { api } = await import("@/lib/api");
+            const res = await api<Record<string, unknown>>("/api/fo/guardian/enter", {
+              method: "POST",
+              auth: true,
+              body: { confirm: true, network: "mainnet" },
+            });
+            setResult(res);
+          } catch (e) {
+            setResult({ error: (e as Error).message });
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        Enter Guardian (on-chain)
+      </Button>
+      {result ? (
+        <div className="rounded-md border border-border/50 bg-surface-0/50 px-3 py-2 text-xs">
+          <div className="font-medium text-foreground">
+            {String(result.status ?? (result.error ? "FAILED" : "OK"))}
+          </div>
+          <p className="mt-1 text-muted-foreground">
+            {result.fromMode && result.toMode
+              ? `${String(result.fromMode)} → ${String(result.toMode)}`
+              : String(result.note ?? result.error ?? result.reason ?? "")}
+          </p>
+          {typeof result.txHash === "string" && result.txHash ? (
+            <p className="mt-1 font-mono text-[10px] text-muted-foreground">{result.txHash}</p>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -332,9 +383,9 @@ function GuardianSimulateButton() {
         Simulate Guardian (SANDBOX)
       </Button>
       {result ? (
-        <pre className="max-h-40 overflow-auto rounded-md border border-border/40 bg-surface-0 p-2 font-mono text-[10px] text-muted-foreground">
-          {JSON.stringify(result, null, 2)}
-        </pre>
+        <div className="rounded-md border border-border/50 bg-surface-0/50 px-3 py-2 text-xs text-muted-foreground">
+          {String(result.summary ?? result.error ?? "Sandbox path previewed")}
+        </div>
       ) : null}
     </div>
   );
