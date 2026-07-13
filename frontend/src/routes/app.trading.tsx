@@ -1,6 +1,8 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNetwork } from "@/lib/network-store";
+import { useToken } from "@/lib/auth-store";
 import { useSodexSymbols, useSodexOrderbook, useSodexAccount, useSodexGateways, useVerifySodexAccount } from "@/lib/api-hooks";
 import { api } from "@/lib/api";
 import { EmptyState, Panel, PanelHeader, Stat } from "@/components/app/panel";
@@ -28,6 +30,50 @@ export const Route = createFileRoute("/app/trading")({
     throw redirect({ to: "/app/wealth", search: { tab: "trade" } });
   },
 });
+
+function CapabilityBadge({
+  symbol,
+  network,
+}: {
+  symbol?: string;
+  network: "mainnet" | "testnet";
+}) {
+  const token = useToken();
+  const q = useQuery({
+    queryKey: ["sodex", "capability", network, symbol, token],
+    queryFn: () =>
+      api<{
+        buyable?: boolean;
+        capability?: { state?: string } | null;
+        note?: string;
+      }>("/api/sodex/markets/capability", {
+        auth: true,
+        query: { environment: network, symbol },
+      }),
+    enabled: !!token && !!symbol,
+    refetchInterval: 60_000,
+  });
+
+  if (!symbol) return null;
+  const state = q.data?.capability?.state ?? "UNVERIFIED";
+  const buyable = q.data?.buyable === true;
+  return (
+    <Badge
+      variant="outline"
+      title={q.data?.note}
+      className={
+        "font-mono text-[10px] uppercase " +
+        (buyable
+          ? "border-emerald-500/40 text-emerald-300"
+          : state === "CANCEL_ONLY"
+            ? "border-red-500/40 text-red-300"
+            : "border-border/60 text-muted-foreground")
+      }
+    >
+      {state}
+    </Badge>
+  );
+}
 
 export function TradingWorkspace() {
   const [network] = useNetwork();
@@ -91,6 +137,7 @@ export function TradingWorkspace() {
         <Badge variant="outline" className="font-mono text-[10px] uppercase">
           {network}
         </Badge>
+        <CapabilityBadge symbol={activeSymbol} network={network} />
         {network === "mainnet" && (
           <Badge className="border-warning/40 bg-warning/10 text-warning font-mono text-[10px] uppercase">
             Mainnet cap {usd(cap)}

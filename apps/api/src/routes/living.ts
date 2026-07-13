@@ -7,9 +7,11 @@ import { z } from "zod";
 import type { AppContext } from "../app.js";
 import { createRequireWallet } from "../auth/requireWallet.js";
 import { listTrack, pushTrack } from "../fo/track.js";
+import { FO_AI_TOOLS, runFoTool } from "../fo/ai-tools.js";
 import { canForWallet } from "../skills/persist.js";
 import { normalizeSsiSnapshot } from "../sodex/mark-to-market.js";
 import { OPENAPI_TO_TOKEN, SSI_INDEX_TOKENS, basescanTokenUrl } from "../ssi/addresses.js";
+import { prisma } from "../db.js";
 
 export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext) {
   const requireWallet = createRequireWallet(ctx.env);
@@ -362,7 +364,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
     };
   });
 
-  /** Tool-cited Family Office AI — injects live Terminal brief before answering. */
+  /** Tool-cited Family Office AI — structured tool calls + persisted AgentLog trace. */
   app.post("/api/fo/ai/chat", { preHandler: requireWallet }, async (req, reply) => {
     const body = z
       .object({
@@ -382,58 +384,101 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
     }
 
+    const wallet = req.wallet!.address;
     const citations: Array<{ source: string; endpoint: string; at: string; status: string }> = [];
-    const stamp = (source: string, endpoint: string, status: string) => {
-      citations.push({ source, endpoint, at: new Date().toISOString(), status });
-    };
-
-    let contextBlock = "";
-    try {
-      const etf = await ctx.soso.etfSummaryHistory({
-        symbol: "BTC",
-        country_code: "US",
-        limit: 2,
-      });
-      stamp("etf", "/etfs/summary-history", "LIVE");
-      contextBlock += `\nETF summary-history (BTC US): ${JSON.stringify(etf).slice(0, 1200)}`;
-    } catch {
-      stamp("etf", "/etfs/summary-history", "UNAVAILABLE");
-    }
-    try {
-      const news = await ctx.soso.hotNews({ page: 1, page_size: 3 });
-      stamp("feeds", "/news/hot", "LIVE");
-      contextBlock += `\nHot news: ${JSON.stringify(news).slice(0, 1200)}`;
-    } catch {
-      stamp("feeds", "/news/hot", "UNAVAILABLE");
-    }
-    try {
-      const raw = await ctx.soso.indexMarketSnapshot("ssimag7");
-      const snap = normalizeSsiSnapshot(raw, "ssimag7");
-      stamp("index", "/indices/ssimag7/market-snapshot", "LIVE");
-      contextBlock += `\nssiMAG7 Terminal index level: nav=${snap.nav} change24hPct=${snap.change24h} (index level ≠ MAG7.ssi token price)`;
-    } catch {
-      stamp("index", "/indices/ssimag7/market-snapshot", "UNAVAILABLE");
-    }
+    const toolTrace: Array<{ name: string; args: string; resultPreview: string }> = [];
 
     const system = `You are HEIRLOCK Family Office AI on the SoSoValue stack.
 Rules:
-- Only use facts present in CONTEXT below; if missing, say UNAVAILABLE.
-- Cite sources by module name (etf, feeds, index).
+- Prefer calling tools for live facts (ETF, news, macro, SSI snapshot, SoDEX portfolio).
+- If a tool returns UNAVAILABLE, say UNAVAILABLE for that fact — never invent.
+- Cite modules by name (etf, feeds, macro, index, sodex).
 - Never invent SSI contract addresses, balances, or AUM.
 - Refuse legal/tax advice.
-- Be concise.
+- Be concise.`;
 
-CONTEXT:${contextBlock || "\n(no live modules — say UNAVAILABLE)"}`;
+    type Msg = {
+      role: "system" | "user" | "assistant" | "tool";
+      content: string;
+      tool_call_id?: string;
+      name?: string;
+    };
+    const messages: Msg[] = [
+      { role: "system", content: system },
+      { role: "user", content: body.data.message },
+    ];
 
     try {
-      const res = await ctx.ai.chat({
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: body.data.message },
-        ],
+      let res = await ctx.ai.chat({
+        messages: messages as never,
+        tools: FO_AI_TOOLS,
         thinking: true,
         maxTokens: 1024,
       });
+
+      let rounds = 0;
+      while (res.toolCalls?.length && rounds < 3) {
+        rounds += 1;
+        messages.push({
+          role: "assistant",
+          content: res.content || "",
+          // OpenAI-compatible history needs tool_calls on the assistant turn
+          ...( { tool_calls: res.toolCalls } as object ),
+        } as Msg);
+
+        for (const call of res.toolCalls) {
+          const executed = await runFoTool(
+            ctx,
+            call.function.name,
+            call.function.arguments ?? "{}",
+            wallet,
+          );
+          citations.push(executed.citation);
+          toolTrace.push({
+            name: call.function.name,
+            args: call.function.arguments ?? "{}",
+            resultPreview: executed.result.slice(0, 400),
+          });
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            name: call.function.name,
+            content: executed.result,
+          });
+        }
+
+        res = await ctx.ai.chat({
+          messages: messages as never,
+          tools: FO_AI_TOOLS,
+          thinking: true,
+          maxTokens: 1024,
+        });
+      }
+
+      // Persist audit trace
+      try {
+        const profile = await prisma.userProfile.findUnique({
+          where: { walletAddress: wallet.toLowerCase() },
+        });
+        await prisma.agentLog.create({
+          data: {
+            userId: profile?.id,
+            provider: res.provider,
+            model: res.model,
+            event: "fo.ai.chat",
+            detail: JSON.stringify({
+              message: body.data.message.slice(0, 500),
+              toolTrace,
+              citations,
+              contentPreview: (res.content ?? "").slice(0, 800),
+            }),
+            latencyMs: res.latencyMs,
+          },
+        });
+      } catch {
+        /* non-fatal */
+      }
+
       return {
         status: "LIVE",
         provider: res.provider,
@@ -441,6 +486,7 @@ CONTEXT:${contextBlock || "\n(no live modules — say UNAVAILABLE)"}`;
         content: res.content,
         reasoning: res.reasoning,
         latencyMs: res.latencyMs,
+        toolTrace,
         citations: citations.map((c) => ({
           module: c.source,
           path: c.endpoint,
@@ -448,16 +494,56 @@ CONTEXT:${contextBlock || "\n(no live modules — say UNAVAILABLE)"}`;
           at: c.at,
         })),
       };
-    } catch (err) {
-      return reply.code(502).send({
-        error: err instanceof Error ? err.message : "AI failure",
-        citations: citations.map((c) => ({
-          module: c.source,
-          path: c.endpoint,
-          status: c.status,
-          at: c.at,
-        })),
-      });
+    } catch (toolErr) {
+      // Fallback when no tool-calling provider is available: prefetch context once.
+      const citationsFb = [...citations];
+      let contextBlock = "";
+      for (const name of ["soso_etf", "soso_news", "ssi_snapshot"] as const) {
+        const executed = await runFoTool(ctx, name, "{}", wallet);
+        citationsFb.push(executed.citation);
+        contextBlock += `\n${name}: ${executed.result.slice(0, 1200)}`;
+      }
+      try {
+        const res = await ctx.ai.chat({
+          messages: [
+            {
+              role: "system",
+              content: `${system}\n\nCONTEXT:${contextBlock || "\n(no live modules)"}`,
+            },
+            { role: "user", content: body.data.message },
+          ],
+          thinking: true,
+          maxTokens: 1024,
+        });
+        return {
+          status: "LIVE",
+          provider: res.provider,
+          model: res.model,
+          content: res.content,
+          reasoning: res.reasoning,
+          latencyMs: res.latencyMs,
+          toolTrace,
+          fallback: true,
+          fallbackReason: toolErr instanceof Error ? toolErr.message : String(toolErr),
+          citations: citationsFb.map((c) => ({
+            module: c.source,
+            path: c.endpoint,
+            status: c.status,
+            at: c.at,
+          })),
+        };
+      } catch (err) {
+        return reply.code(502).send({
+          error: err instanceof Error ? err.message : "AI failure",
+          citations: citationsFb.map((c) => ({
+            module: c.source,
+            path: c.endpoint,
+            status: c.status,
+            at: c.at,
+          })),
+          toolTrace,
+        });
+      }
     }
   });
 }

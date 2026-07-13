@@ -7,7 +7,8 @@ import { Panel, PanelHeader, Stat } from "@/components/app/panel";
 import { DataBadge } from "@/components/app/data-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpRight, RefreshCw } from "lucide-react";
+import { useAiDrawer } from "@/components/app/ai-drawer-context";
+import { ArrowUpRight, Brain, RefreshCw } from "lucide-react";
 import { pctPoints, short, usd } from "@/lib/format";
 
 export const Route = createFileRoute("/app/living")({
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/app/living")({
 });
 
 function LivingPage() {
+  const { openAi } = useAiDrawer();
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -28,16 +30,41 @@ function LivingPage() {
             execute. Outcomes stay verifiable.
           </p>
         </div>
-        <Link to="/app/wealth" search={{ tab: "trade" }}>
-          <Button variant="secondary" size="sm">
-            Open Wealth
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={() => openAi()}>
+            <Brain className="mr-1.5 h-3.5 w-3.5" />
+            Ask AI
           </Button>
-        </Link>
+          <Link to="/app/wealth" search={{ tab: "trade" }}>
+            <Button variant="secondary" size="sm">
+              Open Wealth
+            </Button>
+          </Link>
+        </div>
       </div>
       <RequireAuth>
         <LivingInner />
       </RequireAuth>
     </div>
+  );
+}
+
+function AskAboutProposal({ title }: { title: string }) {
+  const { openAi } = useAiDrawer();
+  return (
+    <Button
+      variant="ghost"
+      onClick={() =>
+        openAi(
+          title
+            ? `Explain this proposal in plain language and what I should verify before acting: ${title}`
+            : "Explain the current Family Office proposal and preflight.",
+        )
+      }
+    >
+      <Brain className="mr-1.5 h-3.5 w-3.5" />
+      Ask about this
+    </Button>
   );
 }
 
@@ -167,7 +194,7 @@ function LivingInner() {
           ))}
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Link to="/app/trading">
+          <Link to="/app/wealth" search={{ tab: "trade" }}>
             <Button disabled={verdict === "BLOCK"}>
               Confirm on SoDEX <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
             </Button>
@@ -177,9 +204,7 @@ function LivingInner() {
               Allocate on SSI app <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
             </Button>
           </a>
-          <Link to="/app/track">
-            <Button variant="ghost">Open /track</Button>
-          </Link>
+          <AskAboutProposal title={String(proposal.title ?? "")} />
         </div>
       </Panel>
     </div>
