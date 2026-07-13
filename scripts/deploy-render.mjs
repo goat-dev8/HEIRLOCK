@@ -154,6 +154,8 @@ function buildEnvVars(serviceUrl) {
     "ATTESTATION_REGISTRY_ADDRESS_TESTNET",
     "CONTINUITY_NFT_ADDRESS_TESTNET",
     "FEE_COLLECTOR_ADDRESS_TESTNET",
+    "VALUECHAIN_ANCHOR_PRIVATE_KEY",
+    "VALUECHAIN_GUARDIAN_PRIVATE_KEY",
     "AI_FALLBACK_PROVIDERS",
     "NVIDIA_BASE_URL",
     "NVIDIA_MODEL_PRIMARY",
@@ -166,7 +168,14 @@ function buildEnvVars(serviceUrl) {
   const envVars = [];
   for (const key of keys) {
     if (NEVER_UPLOAD.has(key)) continue;
-    const value = overrides[key] ?? env[key];
+    let value = overrides[key] ?? env[key];
+    // Map deployer → operational ValueChain signers (never user trading keys)
+    if (
+      (key === "VALUECHAIN_ANCHOR_PRIVATE_KEY" || key === "VALUECHAIN_GUARDIAN_PRIVATE_KEY") &&
+      (!value || isPlaceholder(value))
+    ) {
+      value = env.VALUECHAIN_ANCHOR_PRIVATE_KEY || env.VALUECHAIN_GUARDIAN_PRIVATE_KEY || env.DEPLOYER_PRIVATE_KEY;
+    }
     if (value === undefined || value === null || value === "") continue;
     if (isPlaceholder(value)) continue;
     let v = String(value).replace(/^"+|"+$/g, "").replace(/^'+|'+$/g, "");
