@@ -4,7 +4,8 @@ import { AiDrawer } from "@/components/app/ai-drawer";
 type AiUi = {
   open: boolean;
   seed?: string;
-  openAi: (seed?: string) => void;
+  thesisId?: string;
+  openAi: (seed?: string, thesisId?: string) => void;
   closeAi: () => void;
 };
 
@@ -13,18 +14,21 @@ const Ctx = createContext<AiUi | null>(null);
 export function AiDrawerProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [seed, setSeed] = useState<string | undefined>();
+  const [thesisId, setThesisId] = useState<string | undefined>();
 
   const value = useMemo<AiUi>(
     () => ({
       open,
       seed,
-      openAi: (nextSeed?: string) => {
+      thesisId,
+      openAi: (nextSeed?: string, nextThesisId?: string) => {
         setSeed(nextSeed);
+        setThesisId(nextThesisId);
         setOpen(true);
       },
       closeAi: () => setOpen(false),
     }),
-    [open, seed],
+    [open, seed, thesisId],
   );
 
   return (
@@ -33,9 +37,13 @@ export function AiDrawerProvider({ children }: { children: ReactNode }) {
       <AiDrawer
         open={open}
         seed={seed}
+        thesisId={thesisId}
         onOpenChange={(next) => {
           setOpen(next);
-          if (!next) setSeed(undefined);
+          if (!next) {
+            setSeed(undefined);
+            setThesisId(undefined);
+          }
         }}
       />
     </Ctx.Provider>

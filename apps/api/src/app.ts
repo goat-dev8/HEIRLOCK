@@ -19,6 +19,7 @@ import { registerDiagRoutes } from "./routes/diag.js";
 import { registerContractsRoutes } from "./routes/contracts.js";
 import { registerCronRoutes } from "./routes/cron.js";
 import { registerLivingRoutes } from "./routes/living.js";
+import { registerPartnerRoutes } from "./routes/partner.js";
 
 export type AppContext = {
   env: Env;
@@ -79,6 +80,7 @@ export async function buildApp(env: Env = loadEnv()) {
   await registerDiagRoutes(app, ctx);
   await registerContractsRoutes(app, ctx);
   await registerLivingRoutes(app, ctx);
+  await registerPartnerRoutes(app, ctx);
   await registerCronRoutes(app, ctx);
 
   app.get("/", async () => ({

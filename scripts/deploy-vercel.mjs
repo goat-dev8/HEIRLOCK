@@ -119,17 +119,21 @@ const existingByKey = new Map((existing.envs || []).map((e) => [e.key, e]));
 
 for (const [key, value] of Object.entries(feEnv)) {
   if (!key.startsWith("VITE_")) continue;
+  let resolved = value;
+  if (key === "VITE_API_URL" && /localhost|127\.0\.0\.1/.test(String(value))) {
+    resolved = "https://heirlock-api.onrender.com";
+  }
   const targets = ["production", "preview", "development"];
   const prev = existingByKey.get(key);
   if (prev) {
     await api(`/v9/projects/${project.id}/env/${prev.id}${teamQs}`, {
       method: "PATCH",
-      body: { value, target: targets, type: "plain" },
+      body: { value: resolved, target: targets, type: "plain" },
     });
   } else {
     await api(`/v10/projects/${project.id}/env${teamQs}`, {
       method: "POST",
-      body: { key, value, target: targets, type: "plain" },
+      body: { key, value: resolved, target: targets, type: "plain" },
     });
   }
   console.log(JSON.stringify({ step: "env", key, action: prev ? "updated" : "created" }));

@@ -19,6 +19,33 @@ enum WealthMode {
   heir
 }
 
+enum ThesisStatus {
+  active
+  challenged
+  invalidated
+  confirmed
+}
+
+enum DecisionActionType {
+  hold
+  ssi_allocate
+  sodex_trade
+  wait
+}
+
+enum DecisionChoice {
+  approved
+  rejected
+  deferred
+}
+
+enum DecisionOutcome {
+  HIT
+  STOP
+  DRIFT
+  PENDING
+}
+
 model UserProfile {
   id            String   @id @default(cuid())
   walletAddress String   @unique @map("wallet_address")
@@ -32,6 +59,8 @@ model UserProfile {
   trades        Trade[]
   skillEvents   SkillEvent[]
   agentLogs     AgentLog[]
+  theses        InvestmentThesis[]
+  decisions     InvestmentDecision[]
 
   @@map("user_profiles")
 }
@@ -191,6 +220,64 @@ model ActionLogRef {
 
   @@index([refType, refId])
   @@map("action_log_refs")
+}
+
+/// A tracked investment belief, created by the AI partner or the user.
+/// Confidence and status evolve as evidence changes — this is the Investment
+/// Memory that makes HEIRLOCK a partner rather than a stateless chatbot.
+model InvestmentThesis {
+  id           String       @id @default(cuid())
+  userId       String       @map("user_id")
+  statement    String
+  status       ThesisStatus @default(active)
+  confidence   Int          @default(50)
+  source       String       @default("ai") // "ai" | "user"
+  evidenceJson Json?        @map("evidence_json")
+  invalidatedReason String? @map("invalidated_reason")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  user      UserProfile          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decisions InvestmentDecision[]
+
+  @@index([userId, status, createdAt])
+  @@map("investment_theses")
+}
+
+/// One node on the Decision Timeline: a proposal the partner surfaced, what
+/// the user chose to do about it, and — once known — the outcome. This is
+/// the persisted record that "why" and "what changed" are built from.
+model InvestmentDecision {
+  id              String              @id @default(cuid())
+  userId          String              @map("user_id")
+  thesisId        String?             @map("thesis_id")
+  actionType      DecisionActionType  @map("action_type")
+  proposalJson    Json                @map("proposal_json")
+  userChoice      DecisionChoice?     @map("user_choice")
+  outcome         DecisionOutcome?    @default(PENDING)
+  livingLoopHash  String?             @map("living_loop_hash")
+  citationsJson   Json?               @map("citations_json")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  user   UserProfile       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thesis InvestmentThesis? @relation(fields: [thesisId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@map("investment_decisions")
+}
+
+/// One per wallet per UTC day — the evidence digest the "What changed since
+/// yesterday" feature diffs against. Cheap append-only snapshot, not a cache.
+model MarketSnapshot {
+  id            String   @id @default(cuid())
+  walletAddress String   @map("wallet_address")
+  day           DateTime @db.Date
+  payloadJson   Json     @map("payload_json")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([walletAddress, day])
+  @@map("market_snapshots")
 }
 
 model AiProviderMetric {

@@ -130,10 +130,11 @@ function buildEnvVars(serviceUrl) {
     SODEX_LOCAL_TEST_WALLET_ONLY: "true",
     AI_PRIMARY_PROVIDER: "nvidia",
     API_PUBLIC_URL: publicUrl,
-    FRONTEND_URL: env.FRONTEND_URL || publicUrl,
-    CORS_ALLOWED_ORIGINS: env.CORS_ALLOWED_ORIGINS || publicUrl,
-    SIWE_DOMAIN: host,
-    SIWE_URI: publicUrl,
+    FRONTEND_URL: "https://heirlock-os.vercel.app",
+    CORS_ALLOWED_ORIGINS:
+      "https://heirlock-os.vercel.app,https://heirlock.vercel.app,http://localhost:5173,http://localhost:3000,http://localhost:8080,http://127.0.0.1:5173,http://127.0.0.1:3000,http://127.0.0.1:8080",
+    SIWE_DOMAIN: "heirlock-os.vercel.app",
+    SIWE_URI: "https://heirlock-os.vercel.app",
   };
 
   const keys = new Set([

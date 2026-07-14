@@ -42,20 +42,55 @@ const CACHED: Record<ValueChainNetwork, ValueChainAddresses> = {
   testnet: loadDeployment("testnet"),
 };
 
-/** Resolve ValueChain addresses — env override wins when set. */
+function envAddress(
+  env: Env,
+  network: ValueChainNetwork,
+  mainnetKey: keyof Env,
+  testnetKey: keyof Env,
+  fallback: Address,
+): Address {
+  const key = network === "testnet" ? testnetKey : mainnetKey;
+  const override = env[key];
+  return (typeof override === "string" && override ? override : fallback) as Address;
+}
+
+/** Resolve ValueChain addresses — env override wins when set (network-specific). */
 export function valueChainAddresses(
   env: Env,
   network: ValueChainNetwork = "mainnet",
 ): ValueChainAddresses {
   const base = CACHED[network];
   return {
-    wealthPolicy: (env.WEALTH_POLICY_ADDRESS as Address | undefined) || base.wealthPolicy,
-    actionLog: (env.ACTION_LOG_ADDRESS as Address | undefined) || base.actionLog,
-    modeController: (env.MODE_CONTROLLER_ADDRESS as Address | undefined) || base.modeController,
-    attestationRegistry:
-      (env.ATTESTATION_REGISTRY_ADDRESS as Address | undefined) || base.attestationRegistry,
-    continuityNft: (env.CONTINUITY_NFT_ADDRESS as Address | undefined) || base.continuityNft,
-    feeCollector: (env.FEE_COLLECTOR_ADDRESS as Address | undefined) || base.feeCollector,
+    wealthPolicy: envAddress(env, network, "WEALTH_POLICY_ADDRESS", "WEALTH_POLICY_ADDRESS_TESTNET", base.wealthPolicy),
+    actionLog: envAddress(env, network, "ACTION_LOG_ADDRESS", "ACTION_LOG_ADDRESS_TESTNET", base.actionLog),
+    modeController: envAddress(
+      env,
+      network,
+      "MODE_CONTROLLER_ADDRESS",
+      "MODE_CONTROLLER_ADDRESS_TESTNET",
+      base.modeController,
+    ),
+    attestationRegistry: envAddress(
+      env,
+      network,
+      "ATTESTATION_REGISTRY_ADDRESS",
+      "ATTESTATION_REGISTRY_ADDRESS_TESTNET",
+      base.attestationRegistry,
+    ),
+    continuityNft: envAddress(
+      env,
+      network,
+      "CONTINUITY_NFT_ADDRESS",
+      "CONTINUITY_NFT_ADDRESS_TESTNET",
+      base.continuityNft,
+    ),
+    feeCollector: envAddress(
+      env,
+      network,
+      "FEE_COLLECTOR_ADDRESS",
+      "FEE_COLLECTOR_ADDRESS_TESTNET",
+      base.feeCollector,
+    ),
   };
 }
 

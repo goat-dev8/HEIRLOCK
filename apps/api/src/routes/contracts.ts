@@ -30,12 +30,12 @@ export async function registerContractsRoutes(app: FastifyInstance, ctx: AppCont
       feeCollector: ctx.env.FEE_COLLECTOR_ADDRESS ?? null,
     };
     const testnet = {
-      wealthPolicy: process.env.WEALTH_POLICY_ADDRESS_TESTNET ?? null,
-      actionLog: process.env.ACTION_LOG_ADDRESS_TESTNET ?? null,
-      modeController: process.env.MODE_CONTROLLER_ADDRESS_TESTNET ?? null,
-      attestationRegistry: process.env.ATTESTATION_REGISTRY_ADDRESS_TESTNET ?? null,
-      continuityNft: process.env.CONTINUITY_NFT_ADDRESS_TESTNET ?? null,
-      feeCollector: process.env.FEE_COLLECTOR_ADDRESS_TESTNET ?? null,
+      wealthPolicy: ctx.env.WEALTH_POLICY_ADDRESS_TESTNET ?? null,
+      actionLog: ctx.env.ACTION_LOG_ADDRESS_TESTNET ?? null,
+      modeController: ctx.env.MODE_CONTROLLER_ADDRESS_TESTNET ?? null,
+      attestationRegistry: ctx.env.ATTESTATION_REGISTRY_ADDRESS_TESTNET ?? null,
+      continuityNft: ctx.env.CONTINUITY_NFT_ADDRESS_TESTNET ?? null,
+      feeCollector: ctx.env.FEE_COLLECTOR_ADDRESS_TESTNET ?? null,
     };
     return {
       mainnet: {

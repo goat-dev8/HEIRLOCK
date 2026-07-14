@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useToken } from "@/lib/auth-store";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Brain, Loader2, Send, Sparkles } from "lucide-react";
+import { BookmarkPlus, Brain, Check, Loader2, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 interface Msg {
@@ -19,23 +20,28 @@ interface Msg {
   provider?: string;
   latencyMs?: number;
   citations?: Array<{ module: string; path: string; status: string }>;
+  thesesSaved?: Array<{ id: string; statement: string }>;
+  saving?: boolean;
+  saved?: boolean;
 }
 
 const SUGGESTIONS = [
-  "Summarise current BTC ETF flows.",
-  "What macro events matter this week?",
-  "Where is ssiMAG7 weight concentrated?",
-  "Draft a short Alive-mode risk memo.",
+  "What matters most in my portfolio right now?",
+  "Challenge the current proposal — what would make it wrong?",
+  "What changed since yesterday?",
+  "Summarise my open theses and their confidence.",
 ];
 
 export function AiDrawer({
   open,
   onOpenChange,
   seed,
+  thesisId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   seed?: string;
+  thesisId?: string;
 }) {
   const token = useToken();
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -43,6 +49,18 @@ export function AiDrawer({
   const [loading, setLoading] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const seeded = useRef(false);
+
+  const memoryQ = useQuery({
+    queryKey: ["fo", "partner", "memory", "active", token],
+    queryFn: () =>
+      api<{ theses: Array<{ id: string; statement: string; confidence: number }> }>(
+        "/api/fo/partner/memory",
+        { auth: true, query: { status: "active" } },
+      ),
+    enabled: !!token && open,
+    staleTime: 30_000,
+  });
+  const recentTheses = (memoryQ.data?.theses ?? []).slice(0, 3);
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
@@ -53,13 +71,16 @@ export function AiDrawer({
       seeded.current = true;
       void send(seed);
     }
-    if (!open) seeded.current = false;
+    if (!open) {
+      seeded.current = false;
+      setMsgs([]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, seed, token]);
 
   async function send(text: string) {
     if (!text.trim() || !token) {
-      if (!token) toast.error("Sign in to ask the Family Office AI");
+      if (!token) toast.error("Sign in to talk to your Partner");
       return;
     }
     setInput("");
@@ -72,11 +93,13 @@ export function AiDrawer({
         model?: string;
         latencyMs?: number;
         citations?: Array<{ module: string; path: string; status: string }>;
+        thesesSaved?: Array<{ id: string; statement: string }>;
       }>("/api/fo/ai/chat", {
         method: "POST",
         auth: true,
-        timeoutMs: 90_000,
-        body: { message: text.trim() },
+        // Multi-round tool calling with reasoning can take longer than a typical request.
+        timeoutMs: 170_000,
+        body: { message: text.trim(), thesisId },
       });
       setMsgs((m) => [
         ...m,
@@ -86,12 +109,31 @@ export function AiDrawer({
           provider: res.provider ?? res.model,
           latencyMs: res.latencyMs,
           citations: res.citations,
+          thesesSaved: res.thesesSaved,
         },
       ]);
     } catch (e) {
-      toast.error((e as Error).message || "AI request failed");
+      toast.error((e as Error).message || "Partner request failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveAsThesis(index: number) {
+    const msg = msgs[index];
+    if (!msg || msg.saving || msg.saved) return;
+    setMsgs((m) => m.map((x, i) => (i === index ? { ...x, saving: true } : x)));
+    try {
+      await api("/api/fo/partner/thesis", {
+        method: "POST",
+        auth: true,
+        body: { statement: msg.content.slice(0, 2000), confidence: 55 },
+      });
+      setMsgs((m) => m.map((x, i) => (i === index ? { ...x, saving: false, saved: true } : x)));
+      toast.success("Saved to Investment Memory");
+    } catch (e) {
+      setMsgs((m) => m.map((x, i) => (i === index ? { ...x, saving: false } : x)));
+      toast.error((e as Error).message || "Could not save thesis");
     }
   }
 
@@ -107,17 +149,30 @@ export function AiDrawer({
               <Brain className="h-4 w-4" />
             </div>
             <div>
-              <SheetTitle className="font-display text-base">Ask AI</SheetTitle>
+              <SheetTitle className="font-display text-base">Partner</SheetTitle>
               <SheetDescription className="text-xs">
-                Cited answers from live SoSoValue Terminal context.
+                Remembers your theses and decisions — cited from live evidence.
               </SheetDescription>
             </div>
           </div>
+          {recentTheses.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {recentTheses.map((t) => (
+                <span
+                  key={t.id}
+                  title={t.statement}
+                  className="max-w-[220px] truncate rounded border border-border/50 bg-surface-2 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground"
+                >
+                  remembering: {t.statement}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </SheetHeader>
 
         <div ref={scroller} className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
           {!token ? (
-            <p className="text-sm text-muted-foreground">Sign in to use Family Office AI.</p>
+            <p className="text-sm text-muted-foreground">Sign in to talk to your Partner.</p>
           ) : msgs.length === 0 ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">Try a suggestion:</p>
@@ -159,6 +214,30 @@ export function AiDrawer({
                       ))}
                     </div>
                   ) : null}
+                  {m.thesesSaved && m.thesesSaved.length > 0 ? (
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-300">
+                      <Check className="h-3 w-3" /> Saved as thesis
+                    </div>
+                  ) : null}
+                  {m.role === "assistant" && (!m.thesesSaved || m.thesesSaved.length === 0) ? (
+                    <button
+                      type="button"
+                      onClick={() => saveAsThesis(i)}
+                      disabled={m.saving || m.saved}
+                      className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground transition-colors hover:text-accent-1 disabled:opacity-60"
+                    >
+                      {m.saved ? (
+                        <>
+                          <Check className="h-3 w-3" /> Saved
+                        </>
+                      ) : (
+                        <>
+                          <BookmarkPlus className="h-3 w-3" />
+                          {m.saving ? "Saving…" : "Save as thesis"}
+                        </>
+                      )}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))
@@ -186,7 +265,7 @@ export function AiDrawer({
                 void send(input);
               }
             }}
-            placeholder="Ask about evidence, risk, or SSI…"
+            placeholder="Ask, challenge, or ask me to remember something…"
             className="min-h-11 resize-none border-border/60 bg-surface-1"
           />
           <Button type="submit" disabled={loading || !input.trim() || !token}>

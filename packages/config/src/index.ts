@@ -132,6 +132,12 @@ export const envSchema = z.object({
   ATTESTATION_REGISTRY_ADDRESS: optionalString,
   CONTINUITY_NFT_ADDRESS: optionalString,
   FEE_COLLECTOR_ADDRESS: optionalString,
+  WEALTH_POLICY_ADDRESS_TESTNET: optionalString,
+  MODE_CONTROLLER_ADDRESS_TESTNET: optionalString,
+  ACTION_LOG_ADDRESS_TESTNET: optionalString,
+  ATTESTATION_REGISTRY_ADDRESS_TESTNET: optionalString,
+  CONTINUITY_NFT_ADDRESS_TESTNET: optionalString,
+  FEE_COLLECTOR_ADDRESS_TESTNET: optionalString,
   /** Operational signer for ActionLog.record / AttestationRegistry.attest (gas only; not user trading key) */
   VALUECHAIN_ANCHOR_PRIVATE_KEY: optionalString,
   /** Dedicated ModeController guardian signer — never the end-user trading key */

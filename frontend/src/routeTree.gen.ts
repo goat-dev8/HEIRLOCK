@@ -22,6 +22,7 @@ import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppResearchRouteImport } from './routes/app.research'
 import { Route as AppPortfolioRouteImport } from './routes/app.portfolio'
 import { Route as AppOnboardingRouteImport } from './routes/app.onboarding'
+import { Route as AppMemoryRouteImport } from './routes/app.memory'
 import { Route as AppLivingRouteImport } from './routes/app.living'
 import { Route as AppHealthRouteImport } from './routes/app.health'
 import { Route as AppGuideRouteImport } from './routes/app.guide'
@@ -95,6 +96,11 @@ const AppOnboardingRoute = AppOnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMemoryRoute = AppMemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLivingRoute = AppLivingRouteImport.update({
   id: '/living',
   path: '/living',
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/app/guide': typeof AppGuideRoute
   '/app/health': typeof AppHealthRoute
   '/app/living': typeof AppLivingRoute
+  '/app/memory': typeof AppMemoryRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/portfolio': typeof AppPortfolioRoute
   '/app/research': typeof AppResearchRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/app/guide': typeof AppGuideRoute
   '/app/health': typeof AppHealthRoute
   '/app/living': typeof AppLivingRoute
+  '/app/memory': typeof AppMemoryRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/portfolio': typeof AppPortfolioRoute
   '/app/research': typeof AppResearchRoute
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/app/guide': typeof AppGuideRoute
   '/app/health': typeof AppHealthRoute
   '/app/living': typeof AppLivingRoute
+  '/app/memory': typeof AppMemoryRoute
   '/app/onboarding': typeof AppOnboardingRoute
   '/app/portfolio': typeof AppPortfolioRoute
   '/app/research': typeof AppResearchRoute
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
     | '/app/guide'
     | '/app/health'
     | '/app/living'
+    | '/app/memory'
     | '/app/onboarding'
     | '/app/portfolio'
     | '/app/research'
@@ -231,6 +241,7 @@ export interface FileRouteTypes {
     | '/app/guide'
     | '/app/health'
     | '/app/living'
+    | '/app/memory'
     | '/app/onboarding'
     | '/app/portfolio'
     | '/app/research'
@@ -253,6 +264,7 @@ export interface FileRouteTypes {
     | '/app/guide'
     | '/app/health'
     | '/app/living'
+    | '/app/memory'
     | '/app/onboarding'
     | '/app/portfolio'
     | '/app/research'
@@ -364,6 +376,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOnboardingRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/memory': {
+      id: '/app/memory'
+      path: '/memory'
+      fullPath: '/app/memory'
+      preLoaderRoute: typeof AppMemoryRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/living': {
       id: '/app/living'
       path: '/living'
@@ -424,6 +443,7 @@ interface AppRouteChildren {
   AppGuideRoute: typeof AppGuideRoute
   AppHealthRoute: typeof AppHealthRoute
   AppLivingRoute: typeof AppLivingRoute
+  AppMemoryRoute: typeof AppMemoryRoute
   AppOnboardingRoute: typeof AppOnboardingRoute
   AppPortfolioRoute: typeof AppPortfolioRoute
   AppResearchRoute: typeof AppResearchRoute
@@ -444,6 +464,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppGuideRoute: AppGuideRoute,
   AppHealthRoute: AppHealthRoute,
   AppLivingRoute: AppLivingRoute,
+  AppMemoryRoute: AppMemoryRoute,
   AppOnboardingRoute: AppOnboardingRoute,
   AppPortfolioRoute: AppPortfolioRoute,
   AppResearchRoute: AppResearchRoute,

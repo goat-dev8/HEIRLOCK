@@ -8,10 +8,11 @@ import type { AppContext } from "../app.js";
 import { createRequireWallet } from "../auth/requireWallet.js";
 import { listTrack, pushTrack } from "../fo/track.js";
 import { FO_AI_TOOLS, runFoTool } from "../fo/ai-tools.js";
+import { computeLivingLoop } from "../fo/living-loop.js";
+import * as memory from "../fo/memory.js";
 import { canForWallet } from "../skills/persist.js";
 import { normalizeSsiSnapshot } from "../sodex/mark-to-market.js";
-import { OPENAPI_TO_TOKEN, SSI_INDEX_TOKENS, basescanTokenUrl } from "../ssi/addresses.js";
-import { evaluateSsiDrift } from "../ssi/drift.js";
+import { SSI_INDEX_TOKENS, basescanTokenUrl } from "../ssi/addresses.js";
 import { attestCitationBundle } from "../valuechain/attestation.js";
 import { enterGuardianMode } from "../valuechain/mode.js";
 import { prisma } from "../db.js";
@@ -34,141 +35,8 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       });
     }
 
-    const citations: Array<{ source: string; endpoint: string; at: string; status: string }> = [];
-    const at = () => new Date().toISOString();
-
-    const settle = async <T>(
-      label: string,
-      endpoint: string,
-      fn: () => Promise<T>,
-    ): Promise<{ ok: true; data: T } | { ok: false; error: string }> => {
-      try {
-        const data = await fn();
-        citations.push({ source: label, endpoint, at: at(), status: "LIVE" });
-        return { ok: true, data };
-      } catch (e) {
-        citations.push({
-          source: label,
-          endpoint,
-          at: at(),
-          status: "UNAVAILABLE",
-        });
-        return { ok: false, error: e instanceof Error ? e.message : String(e) };
-      }
-    };
-
-    const [etf, news, macro, indexSnap, indexList] = await Promise.all([
-      settle("etf", "/etfs/summary-history", () =>
-        ctx.soso.etfSummaryHistory({ symbol: "BTC", country_code: "US", limit: 5 }),
-      ),
-      settle("feeds", "/news/hot", () => ctx.soso.hotNews({ page: 1, page_size: 5 })),
-      settle("macro", "/macro/events", () => ctx.soso.macroEvents({ limit: 5 })),
-      settle("index", "/indices/ssimag7/market-snapshot", () =>
-        ctx.soso.indexMarketSnapshot("ssimag7"),
-      ),
-      settle("indices", "/indices", () => ctx.soso.listIndices()),
-    ]);
-
-    const normalized =
-      indexSnap.ok ? normalizeSsiSnapshot(indexSnap.data, "ssimag7") : null;
-    const tokenSym = OPENAPI_TO_TOKEN.ssimag7;
-    const tokenAddr = tokenSym ? SSI_INDEX_TOKENS[tokenSym] : null;
-
-    let drift = null as Awaited<ReturnType<typeof evaluateSsiDrift>> | null;
-    if (tokenSym && tokenAddr) {
-      drift = await evaluateSsiDrift({
-        indexId: "ssimag7",
-        tokenSymbol: tokenSym,
-        tokenAddress: tokenAddr,
-        terminalChange24hPct: normalized?.change24h ?? null,
-      });
-      citations.push({
-        source: "ssi_token",
-        endpoint: `dexscreener:/tokens/${tokenAddr}`,
-        at: at(),
-        status: drift.onChain?.status === "LIVE" ? "LIVE" : "UNAVAILABLE",
-      });
-    }
-
-    const liveCount = citations.filter((c) => c.status === "LIVE").length;
-    const proposal = {
-      action: drift?.alert ? "SSI_DRIFT_ALLOCATE_OR_REBALANCE" : "REVIEW_SSI_AND_SODEX",
-      title: drift?.alert
-        ? `ssiMAG7 drift ${drift.driftPct?.toFixed(1)}% — allocate or rebalance`
-        : "Hold MAG7 exposure; confirm SoDEX proxy liquidity before size",
-      rationale: drift?.alert
-        ? String(drift.signal)
-        : normalized?.change24h != null && normalized.change24h < -1
-          ? "Terminal index 24h soft; prefer confirm-before-execute and policy cap."
-          : "Terminal index stable enough for Family Office review — still confirm under policy.",
-      indexLevel: normalized?.nav ?? null,
-      change24hPct: normalized?.change24h ?? null,
-      onChainToken: tokenSym
-        ? {
-            symbol: tokenSym,
-            address: tokenAddr,
-            basescan: tokenAddr ? basescanTokenUrl(tokenAddr) : null,
-            priceUsd: drift?.tokenPriceUsd ?? null,
-            change24hPct: drift?.tokenChange24hPct ?? null,
-          }
-        : null,
-      drift,
-      sodexHint: "Trade WSOSO_vUSDC or SSI proxies on SoDEX after Enable Trading + verify aid",
-      ssiAllocateUrl: ctx.env.SSI_APP_URL,
-      ssiEarnUrl: `${String(ctx.env.SSI_APP_URL).replace(/\/$/, "")}/earn`,
-    };
-
-    const maxNotional = Math.min(ctx.env.TRADING_MAX_NOTIONAL_USD, ctx.env.MAINNET_TEST_MAX_NOTIONAL_USD, 1);
-    const preflight = {
-      verdict: ctx.env.KILL_SWITCH_TRADING ? "BLOCK" : "APPROVE",
-      factors: [
-        {
-          id: "policy_cap",
-          label: "WealthPolicy notional cap",
-          status: "ok",
-          detail: `Max $${maxNotional} mainnet-limited`,
-        },
-        {
-          id: "kill_switch",
-          label: "Kill switch",
-          status: ctx.env.KILL_SWITCH_TRADING ? "block" : "ok",
-          detail: ctx.env.KILL_SWITCH_TRADING ? "Trading halted" : "Clear",
-        },
-        {
-          id: "family_office_skill",
-          label: "Family Office Skill",
-          status: fo.ok ? "ok" : "block",
-          detail: fo.ok ? "Enabled" : fo.reason,
-        },
-        {
-          id: "terminal_feeds",
-          label: "SoSoValue Terminal feeds",
-          status: liveCount >= 3 ? "ok" : liveCount >= 1 ? "caution" : "block",
-          detail: `${liveCount}/${citations.length} LIVE`,
-        },
-        {
-          id: "macro_window",
-          label: "Macro feed",
-          status: macro.ok ? "ok" : "caution",
-          detail: macro.ok ? "Events loaded" : "Macro UNAVAILABLE — proceed with caution",
-        },
-        {
-          id: "ssi_drift",
-          label: "SSI Terminal vs token drift",
-          status:
-            drift == null || drift.action === "UNAVAILABLE"
-              ? "caution"
-              : drift.alert
-                ? "caution"
-                : "ok",
-          detail:
-            drift?.signal ??
-            "On-chain token quote unavailable — dual-source check incomplete",
-        },
-      ],
-    };
-    if (preflight.factors.some((f) => f.status === "block")) preflight.verdict = "BLOCK";
-    else if (preflight.factors.some((f) => f.status === "caution")) preflight.verdict = "CAUTION";
+    const loop = await computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: fo.ok ? undefined : fo.reason });
+    const { citations, evidence, proposal, drift, preflight } = loop;
 
     const attestation = await attestCitationBundle({
       env: ctx.env,
@@ -183,19 +51,30 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
       reason: err instanceof Error ? err.message : String(err),
     }));
 
+    // Auto-snapshot: feeds the "What Changed Since Yesterday" digest.
+    memory
+      .upsertMarketSnapshot(req.wallet!.address, {
+        proposalAction: String(proposal.action ?? ""),
+        proposalTitle: String(proposal.title ?? ""),
+        indexLevel: (proposal.indexLevel as number | null) ?? null,
+        change24hPct: (proposal.change24hPct as number | null) ?? null,
+        driftPct: drift?.driftPct ?? null,
+        driftAlert: drift?.alert ?? false,
+        liveCitations: loop.liveCount,
+        totalCitations: citations.length,
+        contentHash: attestation.contentHash,
+      })
+      .catch(() => {
+        /* non-fatal — snapshot is best-effort */
+      });
+
     return {
       status: "LIVE",
       skill: "family_office",
       mode: "alive",
       summary:
         "Governed Living Loop on Terminal + SSI + SoDEX under Family Office Skill permissions.",
-      evidence: {
-        etf: etf.ok ? etf.data : null,
-        news: news.ok ? news.data : null,
-        macro: macro.ok ? macro.data : null,
-        indexSnapshot: normalized,
-        indices: indexList.ok ? indexList.data : null,
-      },
+      evidence,
       citations,
       proposal,
       drift,
@@ -207,7 +86,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
         guide: "/app/guide",
         track: "/app/track",
       },
-      ts: at(),
+      ts: new Date().toISOString(),
     };
   });
 
@@ -488,6 +367,7 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
     const body = z
       .object({
         message: z.string().min(1).max(8000),
+        thesisId: z.string().optional(),
       })
       .safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
@@ -506,15 +386,40 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
     const wallet = req.wallet!.address;
     const citations: Array<{ source: string; endpoint: string; at: string; status: string }> = [];
     const toolTrace: Array<{ name: string; args: string; resultPreview: string }> = [];
+    const thesesSaved: Array<{ id: string; statement: string }> = [];
 
-    const system = `You are HEIRLOCK Family Office AI on the SoSoValue stack.
+    const memoryContext = await memory.memoryContextForAI(wallet);
+    const focusedThesis = body.data.thesisId
+      ? await memory.getThesis(wallet, body.data.thesisId)
+      : null;
+
+    const living = await computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: fo.reason });
+    citations.push(...living.citations);
+
+    const liveEvidence = `LIVE_EVIDENCE (prefetched at request time — cite module names, minimize redundant tool calls):
+Proposal: ${JSON.stringify(living.proposal).slice(0, 1200)}
+Drift: ${living.drift ? JSON.stringify(living.drift).slice(0, 500) : "UNAVAILABLE"}
+Preflight: ${living.preflight.verdict} (${living.liveCount}/${living.citations.length} sources LIVE)`;
+
+    const system = `You are HEIRLOCK's Investment Partner — an AI that remembers this wallet's history, not a stateless chatbot.
 Rules:
-- Prefer calling tools for live facts (ETF, news, macro, SSI snapshot, SoDEX portfolio).
+- LIVE_EVIDENCE below is already prefetched — use it first; only call tools for gaps or explicitly fresher data.
 - If a tool returns UNAVAILABLE, say UNAVAILABLE for that fact — never invent.
 - Cite modules by name (etf, feeds, macro, index, sodex).
 - Never invent SSI contract addresses, balances, or AUM.
 - Refuse legal/tax advice.
-- Be concise.`;
+- When the user asks you to save, track, or remember a view, call save_thesis with a concrete falsifiable statement.
+- When challenged on a prior thesis, weigh it against LIVE_EVIDENCE and say plainly whether it still holds.
+- Be concise.
+
+${liveEvidence}
+
+MEMORY (this wallet's real recorded history — ground your answer in this, never contradict it without new evidence):
+${memoryContext}${
+      focusedThesis
+        ? `\n\nFOCUSED THESIS the user wants challenged/reviewed:\n"${focusedThesis.statement}" (status: ${focusedThesis.status}, confidence: ${focusedThesis.confidence}%)`
+        : ""
+    }`;
 
     type Msg = {
       role: "system" | "user" | "assistant" | "tool";
@@ -531,12 +436,12 @@ Rules:
       let res = await ctx.ai.chat({
         messages: messages as never,
         tools: FO_AI_TOOLS,
-        thinking: true,
+        thinking: false,
         maxTokens: 1024,
       });
 
       let rounds = 0;
-      while (res.toolCalls?.length && rounds < 3) {
+      while (res.toolCalls?.length && rounds < 2) {
         rounds += 1;
         messages.push({
           role: "assistant",
@@ -558,6 +463,16 @@ Rules:
             args: call.function.arguments ?? "{}",
             resultPreview: executed.result.slice(0, 400),
           });
+          if (call.function.name === "save_thesis") {
+            try {
+              const parsed = JSON.parse(executed.result) as { saved?: boolean; thesisId?: string; statement?: string };
+              if (parsed.saved && parsed.thesisId) {
+                thesesSaved.push({ id: parsed.thesisId, statement: parsed.statement ?? "" });
+              }
+            } catch {
+              /* non-fatal */
+            }
+          }
           messages.push({
             role: "tool",
             tool_call_id: call.id,
@@ -569,7 +484,7 @@ Rules:
         res = await ctx.ai.chat({
           messages: messages as never,
           tools: FO_AI_TOOLS,
-          thinking: true,
+          thinking: false,
           maxTokens: 1024,
         });
       }
@@ -606,6 +521,7 @@ Rules:
         reasoning: res.reasoning,
         latencyMs: res.latencyMs,
         toolTrace,
+        thesesSaved,
         citations: citations.map((c) => ({
           module: c.source,
           path: c.endpoint,
@@ -631,7 +547,7 @@ Rules:
             },
             { role: "user", content: body.data.message },
           ],
-          thinking: true,
+          thinking: false,
           maxTokens: 1024,
         });
         return {
@@ -642,6 +558,7 @@ Rules:
           reasoning: res.reasoning,
           latencyMs: res.latencyMs,
           toolTrace,
+          thesesSaved: [],
           fallback: true,
           fallbackReason: toolErr instanceof Error ? toolErr.message : String(toolErr),
           citations: citationsFb.map((c) => ({

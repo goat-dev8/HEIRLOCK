@@ -5,6 +5,7 @@
 import type { AppContext } from "../app.js";
 import type { ToolDefinition } from "@heirlock/ai-provider";
 import { normalizeSsiSnapshot } from "../sodex/mark-to-market.js";
+import * as memory from "./memory.js";
 
 export const FO_AI_TOOLS: ToolDefinition[] = [
   {
@@ -70,6 +71,22 @@ export const FO_AI_TOOLS: ToolDefinition[] = [
             description: "Default mainnet",
           },
         },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_thesis",
+      description:
+        "Persist an investment thesis into HEIRLOCK's Investment Memory so it can be tracked, challenged, and learned from over time. Only call this when the user asks to save/track/remember a belief, or you have formed a concrete, evidence-backed view worth remembering — never for casual chit-chat.",
+      parameters: {
+        type: "object",
+        properties: {
+          statement: { type: "string", description: "The thesis, one or two sentences, stated as a falsifiable claim" },
+          confidence: { type: "number", description: "0-100 confidence this thesis holds over the next review window" },
+        },
+        required: ["statement"],
       },
     },
   },
@@ -162,6 +179,26 @@ export async function runFoTool(
           citation: {
             source: "sodex",
             endpoint: `/accounts/${wallet}/portfolio`,
+            at,
+            status: "LIVE",
+          },
+        };
+      }
+      case "save_thesis": {
+        const statement = String(args.statement ?? "").trim();
+        if (!statement) throw new Error("statement_required");
+        const confidence = Number(args.confidence ?? 50);
+        const thesis = await memory.createThesis({
+          wallet,
+          statement,
+          confidence: Number.isFinite(confidence) ? confidence : 50,
+          source: "ai",
+        });
+        return {
+          result: JSON.stringify({ saved: true, thesisId: thesis.id, statement: thesis.statement }),
+          citation: {
+            source: "memory",
+            endpoint: "investment_thesis.create",
             at,
             status: "LIVE",
           },
