@@ -9,8 +9,15 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import type { AppContext } from "../app.js";
 import { createRequireWallet } from "../auth/requireWallet.js";
+import { runMemoryDebate } from "../fo/debate.js";
 import { computeLivingLoop } from "../fo/living-loop.js";
 import * as memory from "../fo/memory.js";
+import {
+  computeFalsifyAlerts,
+  computeOpportunityRadar,
+  computePortfolioDna,
+  replayDecision,
+} from "../fo/partner-intel.js";
 import { listTrack } from "../fo/track.js";
 import { canForWallet } from "../skills/persist.js";
 import { readOnChainWealthPolicy } from "../valuechain/policy-read.js";
@@ -34,30 +41,52 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
       });
     }
 
-    const [loop, openTheses, whatChanged] = await Promise.all([
+    const [loop, openTheses, whatChanged, dna, policy] = await Promise.all([
       computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: undefined }),
       memory.listTheses(wallet, { limit: 20 }),
       memory.getWhatChanged(wallet),
+      computePortfolioDna(wallet),
+      readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
     ]);
 
     const activeTheses = openTheses.filter((t) => t.status === "active" || t.status === "challenged");
+    const seenStmt = new Set<string>();
+    const uniqueTheses = activeTheses.filter((t) => {
+      const key = t.statement.trim().toLowerCase();
+      if (seenStmt.has(key)) return false;
+      seenStmt.add(key);
+      return true;
+    });
     const topDeltas = whatChanged.deltas.slice(0, 5);
+    const falsify = await computeFalsifyAlerts(wallet, loop, policy);
+    const radar = computeOpportunityRadar(loop, falsify, policy);
+    const pressure = falsify.filter((f) => f.severity === "pressure" || f.severity === "broken");
 
-    const headline = loop.drift?.alert
-      ? loop.proposal.title
-      : topDeltas.length > 0
-        ? `${topDeltas.length} thing${topDeltas.length === 1 ? "" : "s"} changed since yesterday`
-        : String(loop.proposal.title);
+    const headline = pressure.length > 0
+      ? `${pressure.length} thesis under falsification pressure`
+      : loop.drift?.alert
+        ? loop.proposal.title
+        : topDeltas.length > 0
+          ? `${topDeltas.length} thing${topDeltas.length === 1 ? "" : "s"} changed since yesterday`
+          : String(loop.proposal.title);
 
     return {
       status: "LIVE",
+      product: "Falsifying Partner",
       headline,
       rationale: loop.proposal.rationale,
       proposal: loop.proposal,
       drift: loop.drift,
       preflight: loop.preflight,
       citations: loop.citations,
-      openTheses: activeTheses.map((t) => ({
+      dna: {
+        archetype: dna.archetype,
+        tagline: dna.tagline,
+        stats: dna.stats,
+      },
+      falsify: pressure.slice(0, 3),
+      radar: radar.slice(0, 3),
+      openTheses: uniqueTheses.map((t) => ({
         id: t.id,
         statement: t.statement,
         status: t.status,
@@ -70,6 +99,7 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
         topDeltas,
       },
       choices: [
+        { id: "debate", label: "Debate", description: "Counsel vs Falsifier — memory-bound, cited" },
         { id: "approve", label: "Approve", description: "Act on this under current WealthPolicy" },
         { id: "challenge", label: "Challenge", description: "Ask the Partner to defend this with fresh evidence" },
         { id: "wait", label: "Wait", description: "Log a decision to revisit later, take no action now" },
@@ -301,5 +331,63 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
   app.get("/api/fo/partner/changed", { preHandler: requireWallet }, async (req) => {
     const wallet = req.wallet!.address;
     return memory.getWhatChanged(wallet);
+  });
+
+  /** Portfolio DNA — behavioral fingerprint from decisions, not holdings. */
+  app.get("/api/fo/partner/dna", { preHandler: requireWallet }, async (req) => {
+    const dna = await computePortfolioDna(req.wallet!.address);
+    return { status: "LIVE", dna };
+  });
+
+  /** What Invalidated My Thesis — falsification pressure from live evidence. */
+  app.get("/api/fo/partner/falsify", { preHandler: requireWallet }, async (req, reply) => {
+    const wallet = req.wallet!.address;
+    const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
+    if (!fo.ok) return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
+    const [loop, policy] = await Promise.all([
+      computeLivingLoop(ctx, { foEnabled: true }),
+      readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
+    ]);
+    const alerts = await computeFalsifyAlerts(wallet, loop, policy);
+    return { status: "LIVE", alerts, citations: loop.citations };
+  });
+
+  /** Opportunity Radar — policy-safe windows from SSI drift + falsify + continuity. */
+  app.get("/api/fo/partner/radar", { preHandler: requireWallet }, async (req, reply) => {
+    const wallet = req.wallet!.address;
+    const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
+    if (!fo.ok) return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
+    const [loop, policy] = await Promise.all([
+      computeLivingLoop(ctx, { foEnabled: true }),
+      readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
+    ]);
+    const falsify = await computeFalsifyAlerts(wallet, loop, policy);
+    const items = computeOpportunityRadar(loop, falsify, policy);
+    return { status: "LIVE", items };
+  });
+
+  /** Decision Replay — would today's evidence change a past choice? */
+  app.get("/api/fo/partner/replay", { preHandler: requireWallet }, async (req, reply) => {
+    const wallet = req.wallet!.address;
+    const query = z.object({ decisionId: z.string().min(1) }).safeParse(req.query ?? {});
+    if (!query.success) return reply.code(400).send({ error: "decisionId_required" });
+    const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
+    const loop = await computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: fo.ok ? undefined : fo.reason });
+    const replay = await replayDecision(wallet, query.data.decisionId, loop);
+    if (!replay) return reply.code(404).send({ error: "decision_not_found" });
+    return { status: "LIVE", replay };
+  });
+
+  /**
+   * Memory-bound Adversarial Debate — Counsel vs Falsifier.
+   * Distinct from catalyst bull/bear: argues over THIS wallet's memory + Living Loop only.
+   */
+  app.post("/api/fo/partner/debate", { preHandler: requireWallet }, async (req, reply) => {
+    const wallet = req.wallet!.address;
+    const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
+    if (!fo.ok) return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
+    const loop = await computeLivingLoop(ctx, { foEnabled: true });
+    const debate = await runMemoryDebate(ctx, wallet, loop);
+    return debate;
   });
 }
