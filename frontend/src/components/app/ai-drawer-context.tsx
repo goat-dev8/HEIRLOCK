@@ -5,7 +5,8 @@ type AiUi = {
   open: boolean;
   seed?: string;
   thesisId?: string;
-  openAi: (seed?: string, thesisId?: string) => void;
+  openAi: (nextSeed?: string, nextThesisId?: string) => void;
+  toggleAi: () => void;
   closeAi: () => void;
 };
 
@@ -26,6 +27,7 @@ export function AiDrawerProvider({ children }: { children: ReactNode }) {
         setThesisId(nextThesisId);
         setOpen(true);
       },
+      toggleAi: () => setOpen((v) => !v),
       closeAi: () => setOpen(false),
     }),
     [open, seed, thesisId],

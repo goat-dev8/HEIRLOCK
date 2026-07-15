@@ -33,11 +33,12 @@ export function AppTopbar({ title, subtitle }: { title?: string; subtitle?: stri
             type="button"
             variant="ghost"
             size="sm"
-            className="hidden sm:inline-flex"
+            className="hidden sm:inline-flex gap-1.5 text-[15px]"
             onClick={() => openAi()}
-            aria-label="Ask AI"
+            aria-label="Open Partner chat"
           >
             <Brain className="h-4 w-4" />
+            <span className="hidden lg:inline">Partner</span>
           </Button>
           <HealthDot />
           <NetworkSwitcher />
