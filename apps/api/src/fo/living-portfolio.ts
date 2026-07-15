@@ -93,7 +93,7 @@ export async function computeLivingPortfolio(opts: {
     .slice(0, 4)
     .map((line) => {
       const m = line.match(/^([^:]+):\s*(.+?)\s*→\s*(.+)$/);
-      if (!m) return line;
+      if (!m?.[1] || m[2] == null || m[3] == null) return line;
       return `${m[1]}: ${fmt(m[2])} → ${fmt(m[3])}`;
     });
 
