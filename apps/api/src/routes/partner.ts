@@ -23,6 +23,7 @@ import { listTrack } from "../fo/track.js";
 import { buildEvidenceGraph } from "../fo/evidence-graph.js";
 import { computeLivingPortfolio } from "../fo/living-portfolio.js";
 import { listRecentLessons } from "../fo/learning.js";
+import { buildPartnerBrief, invalidateBriefCache } from "../fo/partner-brief.js";
 import { evaluatePartnerApprovalGate } from "../fo/continuity-gate.js";
 import { linkDecisionToOrder } from "../fo/fill-learning.js";
 import { buildCitationContentHash } from "../valuechain/attestation.js";
@@ -40,113 +41,14 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
   /** What matters now — the single composed brief the Partner Home opens with. */
   app.get("/api/fo/partner/brief", { preHandler: requireWallet }, async (req, reply) => {
     const wallet = req.wallet!.address;
-    const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
-    if (!fo.ok) {
+    const result = await buildPartnerBrief(ctx, wallet);
+    if ("status" in result && result.status === 403) {
       return reply.code(403).send({
-        error: "Family Office Skill disabled — enable it in Skills to run the Partner brief",
-        reason: fo.reason,
+        error: result.error,
+        reason: result.reason,
       });
     }
-
-    const [loop, , whatChanged, dna, policy] = await Promise.all([
-      computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: undefined }),
-      memory.listTheses(wallet, { limit: 20 }),
-      memory.getWhatChanged(wallet),
-      computePortfolioDna(wallet),
-      readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
-    ]);
-
-    const topDeltas = whatChanged.deltas.slice(0, 5);
-    const pulse = await runDailyPulse({ wallet, loop, policy });
-    const livingPortfolio = await computeLivingPortfolio({
-      ctx,
-      wallet,
-      loop,
-      pulse,
-      policy,
-    });
-    const evidenceGraph = await buildEvidenceGraph({ wallet, loop, policy });
-    const falsify = pulse.falsify.length
-      ? pulse.falsify
-      : (await computeFalsifyAlerts(wallet, loop, policy)).filter(
-          (f) => f.severity === "pressure" || f.severity === "broken",
-        );
-    const radar = pulse.radar.length ? pulse.radar : computeOpportunityRadar(loop, falsify, policy);
-
-    // Refresh theses after pulse mutations
-    const thesesAfter = await memory.listTheses(wallet, { limit: 20 });
-    const activeAfter = thesesAfter.filter((t) => t.status === "active" || t.status === "challenged");
-    const seen2 = new Set<string>();
-    const uniqueAfter = activeAfter.filter((t) => {
-      const key = t.statement.trim().toLowerCase();
-      if (seen2.has(key)) return false;
-      seen2.add(key);
-      return true;
-    });
-
-    const continuityGate = evaluatePartnerApprovalGate({
-      preflightVerdict: String(loop.preflight.verdict),
-      policy,
-      debateRan: false,
-    });
-
-    return {
-      status: "LIVE",
-      product: "Living Investment Partner",
-      headline: pulse.headline,
-      rationale: pulse.summary,
-      proposal: loop.proposal,
-      drift: loop.drift,
-      preflight: loop.preflight,
-      policy: policy
-        ? {
-            mode: policy.modeName,
-            source: policy.source,
-            maxNotionalUsd: policy.maxNotionalUsd,
-            address: policy.address,
-          }
-        : null,
-      continuityGate,
-      citations: loop.citations,
-      pulse: {
-        ranAt: pulse.ranAt,
-        summary: pulse.summary,
-        answers: pulse.answers,
-        mutations: pulse.mutations.slice(0, 12),
-      },
-      dna: {
-        archetype: dna.archetype,
-        tagline: dna.tagline,
-        stats: dna.stats,
-      },
-      falsify: falsify.slice(0, 3),
-      radar: radar.slice(0, 3),
-      livingPortfolio,
-      evidenceGraph: {
-        summary: evidenceGraph.summary,
-        nodeCount: evidenceGraph.nodes.length,
-        edgeCount: evidenceGraph.edges.length,
-      },
-      openTheses: uniqueAfter.map((t) => ({
-        id: t.id,
-        statement: t.statement,
-        status: t.status,
-        confidence: t.confidence,
-        createdAt: t.createdAt,
-      })),
-      whatChanged: {
-        status: whatChanged.status,
-        deltaCount: whatChanged.deltas.length,
-        topDeltas,
-      },
-      choices: [
-        { id: "debate", label: "Debate", description: "Counsel → Falsifier → Moderator" },
-        { id: "approve", label: "Approve", description: "Act under WealthPolicy after debate" },
-        { id: "challenge", label: "Challenge", description: "Push back with fresh evidence" },
-        { id: "wait", label: "Wait", description: "Log and revisit later" },
-      ],
-      ts: new Date().toISOString(),
-    };
+    return result;
   });
 
   /** Decision Timeline — proposal -> choice -> execution -> outcome -> learning. */
@@ -328,6 +230,7 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
           maxNotionalUsd: policyOnChain?.maxNotionalUsd,
         }) as Prisma.InputJsonValue,
       });
+      await invalidateBriefCache(wallet);
       return { status: "LIVE", decision, nextStep: body.data.userChoice === "approved" ? "sign" : "learn" };
     } catch (err) {
       if (err instanceof Error && err.message === "thesis_not_found") {
@@ -603,6 +506,7 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
       /* audit persistence is best-effort — debate response still returns */
     }
 
+    await invalidateBriefCache(wallet);
     return { ...debate, debateDecisionId };
   });
 
@@ -615,7 +519,8 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
       computeLivingLoop(ctx, { foEnabled: true }),
       readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
     ]);
-    const pulse = await runDailyPulse({ wallet, loop, policy, force: true });
+    const pulse = await runDailyPulse({ wallet, loop, policy, force: true, persist: true });
+    await invalidateBriefCache(wallet);
     return pulse;
   });
 }

@@ -32,8 +32,9 @@ export async function computeLivingPortfolio(opts: {
   loop: LivingLoopResult;
   pulse?: DailyPulse | null;
   policy?: OnChainWealthPolicy | null;
+  skipBalances?: boolean;
 }): Promise<LivingPortfolio> {
-  const { ctx, wallet, loop, pulse, policy } = opts;
+  const { ctx, wallet, loop, pulse, policy, skipBalances } = opts;
   const theses = await memory.listTheses(wallet, { limit: 20 });
   const open = theses.filter((t) => t.status === "active" || t.status === "challenged");
 
@@ -50,7 +51,7 @@ export async function computeLivingPortfolio(opts: {
     },
   });
 
-  if (account) {
+  if (!skipBalances && account) {
     try {
       const balances = await ctx.sodex.getBalances("testnet", wallet, account.accountId);
       const rows = Array.isArray(balances) ? balances : (balances as { balances?: unknown[] })?.balances ?? [];

@@ -94,15 +94,19 @@ export async function runDailyPulse(opts: {
   loop: LivingLoopResult;
   policy?: OnChainWealthPolicy | null;
   force?: boolean;
+  /** When false (GET brief), skip DB writes and replay — background pulse still persists. */
+  persist?: boolean;
 }): Promise<DailyPulse> {
-  const { wallet, loop, policy } = opts;
+  const { wallet, loop, policy, persist = true } = opts;
   const ranAt = new Date().toISOString();
-  const falsify = await computeFalsifyAlerts(wallet, loop, policy);
+  const [falsify, theses, decisions, whatChanged] = await Promise.all([
+    computeFalsifyAlerts(wallet, loop, policy),
+    memory.listTheses(wallet, { limit: 50 }),
+    memory.listDecisions(wallet, 12),
+    memory.getWhatChanged(wallet),
+  ]);
   const radar = computeOpportunityRadar(loop, falsify, policy);
-  const theses = await memory.listTheses(wallet, { limit: 50 });
   const open = theses.filter((t) => t.status === "active" || t.status === "challenged");
-  const decisions = await memory.listDecisions(wallet, 12);
-  const whatChanged = await memory.getWhatChanged(wallet);
 
   const mutations: DailyPulse["mutations"] = [];
   const weaker: ThesisEvolution[] = [];
@@ -158,15 +162,17 @@ export async function runDailyPulse(opts: {
       citations: env.citations ?? [],
     };
 
-    await prisma.investmentThesis.update({
-      where: { id: t.id },
-      data: {
-        confidence: next,
-        status,
-        ...(invalidatedReason ? { invalidatedReason } : {}),
-        evidenceJson: evidencePayload as Prisma.InputJsonValue,
-      },
-    });
+    if (persist) {
+      await prisma.investmentThesis.update({
+        where: { id: t.id },
+        data: {
+          confidence: next,
+          status,
+          ...(invalidatedReason ? { invalidatedReason } : {}),
+          evidenceJson: evidencePayload as Prisma.InputJsonValue,
+        },
+      });
+    }
 
     const evo: ThesisEvolution = {
       thesisId: t.id,
@@ -191,18 +197,22 @@ export async function runDailyPulse(opts: {
 
   // Self-criticism: replay recent approvals — would today change the call?
   const wrong: MistakeLesson[] = [];
-  const approved = decisions.filter((d) => d.userChoice === "approved").slice(0, 5);
-  for (const d of approved) {
-    const replay = await replayDecision(wallet, d.id, loop);
-    if (!replay) continue;
-    if (replay.todayVerdict === "would_change" || replay.todayVerdict === "insufficient_evidence") {
-      wrong.push({
-        decisionId: d.id,
-        thenChoice: d.userChoice,
-        thenAction: d.actionType,
-        lesson: `I recommended ${d.actionType}/${d.userChoice}. Today: ${replay.todayVerdict}. ${replay.reason}`,
-        todayVerdict: replay.todayVerdict,
-      });
+  if (persist) {
+    const approved = decisions.filter((d) => d.userChoice === "approved").slice(0, 5);
+    const replays = await Promise.all(approved.map((d) => replayDecision(wallet, d.id, loop)));
+    for (let i = 0; i < approved.length; i++) {
+      const d = approved[i]!;
+      const replay = replays[i];
+      if (!replay) continue;
+      if (replay.todayVerdict === "would_change" || replay.todayVerdict === "insufficient_evidence") {
+        wrong.push({
+          decisionId: d.id,
+          thenChoice: d.userChoice,
+          thenAction: d.actionType,
+          lesson: `I recommended ${d.actionType}/${d.userChoice}. Today: ${replay.todayVerdict}. ${replay.reason}`,
+          todayVerdict: replay.todayVerdict,
+        });
+      }
     }
   }
 
@@ -258,43 +268,44 @@ export async function runDailyPulse(opts: {
     wrong.length ? `${wrong.length} self-criticism lesson${wrong.length === 1 ? "" : "s"}.` : "No approval regrets detected.",
   ].join(" ");
 
-  try {
-    const profile = await prisma.userProfile.findUnique({
-      where: { walletAddress: wallet.toLowerCase() },
-    });
-    await prisma.agentLog.create({
-      data: {
-        userId: profile?.id,
-        provider: "heirlock",
-        model: "pulse",
-        event: "fo.partner.pulse",
-        detail: JSON.stringify({
-          headline,
-          weaker: weaker.length,
-          stronger: stronger.length,
-          wrong: wrong.length,
-          mutations: mutations.length,
-        }),
-        latencyMs: 0,
-      },
-    });
-  } catch {
-    /* non-fatal */
-  }
+  if (persist) {
+    try {
+      const profile = await prisma.userProfile.findUnique({
+        where: { walletAddress: wallet.toLowerCase() },
+      });
+      await prisma.agentLog.create({
+        data: {
+          userId: profile?.id,
+          provider: "heirlock",
+          model: "pulse",
+          event: "fo.partner.pulse",
+          detail: JSON.stringify({
+            headline,
+            weaker: weaker.length,
+            stronger: stronger.length,
+            wrong: wrong.length,
+            mutations: mutations.length,
+          }),
+          latencyMs: 0,
+        },
+      });
+    } catch {
+      /* non-fatal */
+    }
 
-  // Keep market snapshot fresh so "what changed" has a baseline
-  try {
-    await memory.upsertMarketSnapshot(wallet, {
-      proposalTitle: String(loop.proposal.title ?? ""),
-      proposalAction: String(loop.proposal.action ?? ""),
-      driftPct: loop.drift?.driftPct ?? null,
-      preflight: String(loop.preflight.verdict),
-      liveCount: loop.citations.filter((c) => c.status === "LIVE").length,
-      citationTotal: loop.citations.length,
-      pulsedAt: ranAt,
-    } as Prisma.InputJsonValue);
-  } catch {
-    /* non-fatal */
+    try {
+      await memory.upsertMarketSnapshot(wallet, {
+        proposalTitle: String(loop.proposal.title ?? ""),
+        proposalAction: String(loop.proposal.action ?? ""),
+        driftPct: loop.drift?.driftPct ?? null,
+        preflight: String(loop.preflight.verdict),
+        liveCount: loop.citations.filter((c) => c.status === "LIVE").length,
+        citationTotal: loop.citations.length,
+        pulsedAt: ranAt,
+      } as Prisma.InputJsonValue);
+    } catch {
+      /* non-fatal */
+    }
   }
 
   return {

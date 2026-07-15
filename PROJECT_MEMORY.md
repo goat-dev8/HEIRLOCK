@@ -20,6 +20,6 @@ Category sentence:
 
 ## This ship
 
-Product polish: Partner journey + evidence diagrams, typography/density/jargon pass, trading priced markets, final release report.
+Product polish + **Partner brief performance**: 60s cache, read-only pulse on GET, progressive UI load.
 
 See `FINAL_RELEASE_REPORT.md`.

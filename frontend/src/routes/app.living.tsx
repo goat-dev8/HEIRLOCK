@@ -190,15 +190,17 @@ function PartnerInner() {
 
   const brief = useQuery({
     queryKey: ["fo", "partner", "brief", token],
-    queryFn: () => api<Brief>("/api/fo/partner/brief", { auth: true, timeoutMs: 120_000 }),
+    queryFn: () => api<Brief>("/api/fo/partner/brief", { auth: true, timeoutMs: 90_000 }),
     enabled: !!token,
-    refetchInterval: 90_000,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    placeholderData: (prev) => prev,
   });
 
   const timeline = useQuery({
     queryKey: ["fo", "partner", "timeline", "recent", token],
     queryFn: () => api<{ entries: TimelineEntry[] }>("/api/fo/partner/timeline", { auth: true }),
-    enabled: !!token,
+    enabled: !!token && !!brief.data,
     staleTime: 30_000,
   });
 
@@ -216,7 +218,7 @@ function PartnerInner() {
         }>;
         lessons: Array<{ thesisId: string; statement: string; status: string; resolvedAt: string }>;
       }>("/api/fo/partner/memory", { auth: true }),
-    enabled: !!token,
+    enabled: !!token && !!brief.data,
   });
 
   const learning = useQuery({
@@ -225,7 +227,7 @@ function PartnerInner() {
       api<{ lessons: Array<{ lesson: string; at: string; outcome: string }> }>("/api/fo/partner/learning", {
         auth: true,
       }),
-    enabled: !!token,
+    enabled: !!token && !!brief.data,
   });
 
   const decide = useMutation({
@@ -282,15 +284,6 @@ function PartnerInner() {
     onError: (e) => toast.error((e as Error).message || "Replay failed"),
   });
 
-  if (brief.isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-48 rounded-xl" />
-        <Skeleton className="h-28 rounded-lg" />
-      </div>
-    );
-  }
-
   if (brief.isError) {
     return (
       <Panel className="p-8 text-sm text-muted-foreground">
@@ -304,7 +297,40 @@ function PartnerInner() {
     );
   }
 
-  const data = brief.data!;
+  const data = brief.data;
+  const loadingBrief = brief.isLoading && !data;
+
+  if (loadingBrief) {
+    return (
+      <div className="space-y-8">
+        <PartnerJourneyStory active={0} />
+        <div className="flex flex-wrap items-center gap-3">
+          <DataBadge status="LIVE" />
+          <span className="text-[15px] text-muted-foreground">Loading your pulse…</span>
+        </div>
+        <Panel tone="accent" className="overflow-hidden p-0">
+          <div className="space-y-6 p-7 sm:p-8">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-10 w-full max-w-lg" />
+            <Skeleton className="h-5 w-full max-w-2xl" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Skeleton className="h-24 rounded-xl" />
+              <Skeleton className="h-24 rounded-xl" />
+              <Skeleton className="h-24 rounded-xl" />
+              <Skeleton className="h-24 rounded-xl" />
+            </div>
+          </div>
+        </Panel>
+        <Panel className="p-6 sm:p-7">
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="mt-4 h-10 w-40" />
+        </Panel>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
   const { proposal, drift, preflight, citations, pulse, dna, falsify, radar, livingPortfolio, evidenceGraph: graphMeta, policy, continuityGate } = data;
   const answers = pulse?.answers;
   const verdict = String(preflight.verdict ?? "CAUTION");
