@@ -1,65 +1,42 @@
 # HEIRLOCK — Project Memory
 
-Last updated: 2026-07-15 03:40 UTC+3
+Last updated: 2026-07-15 04:00 UTC+3
 
 ## Mode
 
-**RELEASE CANDIDATE** — closing remaining Partner → Sign → Fill gaps; push + deploy after green local QA.
+**RELEASE CANDIDATE — SHIPPED**
 
 Category sentence:
 
 > *It kept thinking while you were away — re-scores your theses, debates itself, and only lets you approve after Continuity and the Moderator agree.*
 
-## Research performed
+## Deployed
 
-- `PROJECT_MEMORY.md`, `MASTER_PRODUCT_PLAN.md` Phases 1–5
-- `guide_sodex_order.md` §19–21 fill evidence (not HTTP 200)
-- SSI allocate via official app only; ValueChain WealthPolicy mode gate
+| Surface | URL | Evidence |
+|---|---|---|
+| API | https://heirlock-api.onrender.com | `/api/health` 200 ok |
+| Web | https://getheirlock.vercel.app | Partner live, wallet connected |
+| Git | `main` @ `9e746ea` | pushed via `GITHUB_TOKEN` |
 
-## RC implementation (this session)
+## RC milestones completed
 
-### Approve → Wealth → Sign with decisionId
-- `frontend/src/lib/partner-handoff.ts` — sessionStorage decisionId
-- Living Approve/Debate stores decisionId; Sign link passes `?decisionId=`
-- Wealth search schema accepts `decisionId`; TradingWorkspace passes to place
-- `POST /api/sodex/orders/place` accepts `decisionId` → `linkDecisionToOrder`
-- Client also calls `POST /partner/decision/:id/link-order` after place
-
-### Debate persistence on debate endpoint
-- `POST /api/fo/partner/debate` writes InvestmentDecision audit row with full `debateJson` + policy
-- Returns `debateDecisionId`
-
-### Narrative timeline + polish
-- Learn Timeline grouped by week
-- Pulse deltas formatted (no float noise like `0.059999…`)
-
-### DB
-- `prisma migrate deploy` — no pending; all 3 migrations applied
-- Schema integrity: `debate_json`, `policy_json`, `fill_proof_json`, `signed_order_id` present
-
-## Tests
-
-| Suite | Result |
-|---|---|
-| FO unit tests | **14/14 pass** |
-| Full API `pnpm test` | **67/67 pass** |
-| API typecheck | **pass** |
-| Decision schema integrity | **ok** |
-
-## Browser QA (Chrome, `0xf76e…71a3`, ValueChain Testnet, 20.45 SOSO)
-
-| Area | Result |
-|---|---|
-| Partner pulse 6/6 LIVE | **OK** |
-| Policy · Continuity Alive / Approve gated | **OK** |
-| Learn week timeline | **OK** |
-| Continuity ActionLog + Guardian UI | **OK** |
-| Wealth Trade ticket EIP-712 | **OK** |
-| Drift formatting | **OK** (`0.1200`) |
-
-## Explicit next
-
-- Push via `scripts/push-github-safe.mjs`
-- Deploy Render + Vercel
-- Post-deploy production QA
+- Approve → Sign `decisionId` handoff
+- Debate persistence on debate endpoint
+- Continuity gate + fill learning + Memory collapse (prior waves)
+- DB migrations + schema integrity
+- Local Chrome QA + Production Partner QA
+- Render build fix (TS2345 living-portfolio)
 - `RELEASE_REPORT.md`
+
+## Tests / QA
+
+- API tests 67/67; typecheck/build pass
+- Production smoke: health, contracts, Partner pulse/gate/learn
+
+## Remaining (non-blocking)
+
+- SSI token citation flake (DexScreener)
+- Deeper FO tool-call AgentLog traces
+- Guardian-role key separation staging demo
+
+See `RELEASE_REPORT.md` for full evidence and readiness score **8.4/10**.
