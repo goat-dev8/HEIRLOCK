@@ -24,6 +24,7 @@ import {
   exchangeActionTypes,
   toTypedApiSign,
 } from "@/lib/sodex-sign";
+import { clearPartnerDecisionId, readPartnerDecisionId } from "@/lib/partner-handoff";
 
 export const Route = createFileRoute("/app/trading")({
   beforeLoad: () => {
@@ -75,7 +76,7 @@ function CapabilityBadge({
   );
 }
 
-export function TradingWorkspace() {
+export function TradingWorkspace({ decisionId }: { decisionId?: string }) {
   const [network] = useNetwork();
   const [market, setMarket] = useState<"spot" | "perps">("spot");
   const symbols = useSodexSymbols(network, market);
@@ -366,6 +367,7 @@ function OrderTicket({
   async function signAndPlace() {
     if (!prepared || !address) return;
     setPlacing(true);
+    const linkedDecisionId = decisionId || readPartnerDecisionId() || undefined;
     try {
       const nonce = BigInt(prepared.suggestedNonce);
       const payloadHash = computePayloadHash(prepared.actionType, prepared.params);
@@ -396,6 +398,7 @@ function OrderTicket({
             apiNonce: prepared.suggestedNonce,
             notionalUsd: prepared.notionalUsd,
             side,
+            ...(linkedDecisionId ? { decisionId: linkedDecisionId } : {}),
           },
         });
       const sodexOrderId = res.sodexOrderId ?? res.orderId;
@@ -406,6 +409,18 @@ function OrderTicket({
         relayId,
         portfolioUrl: sodexPortfolioUrl,
       });
+      if (linkedDecisionId && res.orderId) {
+        try {
+          await api(`/api/fo/partner/decision/${encodeURIComponent(linkedDecisionId)}/link-order`, {
+            method: "POST",
+            auth: true,
+            body: { signedOrderId: res.orderId },
+          });
+          clearPartnerDecisionId();
+        } catch {
+          /* link-order best-effort — place already may have linked */
+        }
+      }
       try {
         await api("/api/fo/track", {
           method: "POST",

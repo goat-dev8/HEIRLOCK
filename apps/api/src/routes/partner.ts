@@ -565,9 +565,45 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
     const wallet = req.wallet!.address;
     const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
     if (!fo.ok) return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
-    const loop = await computeLivingLoop(ctx, { foEnabled: true });
+    const [loop, policy] = await Promise.all([
+      computeLivingLoop(ctx, { foEnabled: true }),
+      readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
+    ]);
     const debate = await runMemoryDebate(ctx, wallet, loop);
-    return debate;
+
+    // Persist full debate audit trail immediately (before Approve) — Counsel/Falsifier/Moderator + evidence.
+    let debateDecisionId: string | null = null;
+    try {
+      const livingLoopHash = buildCitationContentHash({
+        wallet,
+        citations: loop.citations,
+        proposalAction: String(loop.proposal.action ?? ""),
+      });
+      const audit = await memory.recordDecision({
+        wallet,
+        actionType: "wait",
+        proposal: {
+          ...(loop.proposal as Record<string, unknown>),
+          kind: "debate_audit",
+          title: `Debate · ${String(loop.proposal.title ?? "proposal")}`,
+        } as Prisma.InputJsonValue,
+        livingLoopHash,
+        citations: loop.citations,
+        debateJson: debate as unknown as Prisma.InputJsonValue,
+        policyJson: {
+          mode: policy?.modeName,
+          source: policy?.source,
+          maxNotionalUsd: policy?.maxNotionalUsd,
+          debateStance: debate.synthesis.stance,
+          debateConfidence: debate.synthesis.confidence,
+        } as Prisma.InputJsonValue,
+      });
+      debateDecisionId = audit.id;
+    } catch {
+      /* audit persistence is best-effort — debate response still returns */
+    }
+
+    return { ...debate, debateDecisionId };
   });
 
   /** Force a Living Partner pulse (re-score + self-criticism) without waiting for brief. */

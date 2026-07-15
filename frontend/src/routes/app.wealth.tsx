@@ -8,6 +8,7 @@ import { TradingWorkspace } from "@/routes/app.trading";
 
 const searchSchema = z.object({
   tab: z.enum(["holdings", "trade"]).catch("holdings"),
+  decisionId: z.string().min(1).optional(),
 });
 
 export const Route = createFileRoute("/app/wealth")({
@@ -19,7 +20,7 @@ export const Route = createFileRoute("/app/wealth")({
 });
 
 function WealthPage() {
-  const { tab } = Route.useSearch();
+  const { tab, decisionId } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const active = tab === "trade" ? "trade" : "holdings";
 
@@ -31,13 +32,21 @@ function WealthPage() {
           Review holdings, then execute under policy. Every order is signed by your wallet and
           verified against SoDEX history, trades, and balances.
         </p>
+        {decisionId ? (
+          <p className="mt-2 font-mono text-[10px] uppercase tracking-wide text-accent-1">
+            Linked Partner decision · {decisionId.slice(0, 10)}…
+          </p>
+        ) : null}
       </div>
 
       <Tabs
         value={active}
         onValueChange={(next) => {
           void navigate({
-            search: { tab: next === "trade" ? "trade" : "holdings" },
+            search: {
+              tab: next === "trade" ? "trade" : "holdings",
+              ...(decisionId ? { decisionId } : {}),
+            },
           });
         }}
         className="space-y-6"
@@ -53,7 +62,7 @@ function WealthPage() {
         </TabsContent>
         <TabsContent value="trade" className="mt-0">
           <RequireAuth>
-            <TradingWorkspace />
+            <TradingWorkspace decisionId={decisionId} />
           </RequireAuth>
         </TabsContent>
       </Tabs>

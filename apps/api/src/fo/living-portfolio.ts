@@ -89,7 +89,13 @@ export async function computeLivingPortfolio(opts: {
   const recentShifts = [
     ...(pulse?.answers.whatChanged ?? []).slice(0, 2),
     ...(pulse?.mutations ?? []).slice(0, 2).map((m) => `${m.action}: ${m.detail}`),
-  ].slice(0, 4);
+  ]
+    .slice(0, 4)
+    .map((line) => {
+      const m = line.match(/^([^:]+):\s*(.+?)\s*→\s*(.+)$/);
+      if (!m) return line;
+      return `${m[1]}: ${fmt(m[2])} → ${fmt(m[3])}`;
+    });
 
   return {
     status: account ? "LIVE" : "PARTIAL",
@@ -113,4 +119,13 @@ export async function computeLivingPortfolio(opts: {
 function avgConf(theses: Array<{ confidence: number }>): number {
   if (!theses.length) return 0;
   return Math.round(theses.reduce((a, t) => a + t.confidence, 0) / theses.length);
+}
+
+function fmt(value: string): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || value.trim() === "" || /[a-zA-Z]/.test(value)) return value;
+  if (Number.isInteger(n) || Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+  const abs = Math.abs(n);
+  if (abs >= 1) return n.toFixed(2);
+  return n.toFixed(4);
 }

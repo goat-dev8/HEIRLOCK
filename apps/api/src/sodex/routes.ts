@@ -15,6 +15,7 @@ import {
   mergeSymbolsWithTickers,
 } from "./mark-to-market.js";
 import { applyFillEvidence, reconcileFill } from "./fill-proof.js";
+import { linkDecisionToOrder } from "../fo/fill-learning.js";
 import {
   getCapability,
   isBuyable,
@@ -406,6 +407,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         notionalUsd: z.number().optional(),
         market: z.enum(["spot", "perps"]).default("spot"),
         side: z.string().optional(),
+        decisionId: z.string().min(1).optional(),
       })
       .safeParse(req.body);
 
@@ -459,6 +461,14 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         proofUrl: ctx.sodex.portfolioUrl(parsed.data.environment),
       },
     });
+
+    if (parsed.data.decisionId) {
+      await linkDecisionToOrder({
+        wallet,
+        decisionId: parsed.data.decisionId,
+        signedOrderId: order.id,
+      }).catch(() => undefined);
+    }
 
     try {
       const relayOpts = {

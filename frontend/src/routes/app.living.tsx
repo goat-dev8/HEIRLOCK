@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { pctPoints, relTime, usd } from "@/lib/format";
+import { formatPulseDelta, storePartnerDecisionId } from "@/lib/partner-handoff";
 
 const learnSearchSchema = z.object({
   learn: z.enum(["timeline", "theses", "changed", "lessons"]).catch("timeline"),
@@ -131,6 +132,7 @@ type DebateResult = {
     steps: ActionPlanStep[];
   };
   latencyMs: number;
+  debateDecisionId?: string | null;
 };
 
 function LivingPage() {
@@ -255,6 +257,7 @@ function PartnerInner() {
       }),
     onSuccess: (res) => {
       setLastDecisionId(res.decision.id);
+      storePartnerDecisionId(res.decision.id);
       qc.invalidateQueries({ queryKey: ["fo", "partner"] });
     },
     onError: (e) => toast.error((e as Error).message || "Could not record decision"),
@@ -270,6 +273,7 @@ function PartnerInner() {
       }),
     onSuccess: (res) => {
       setDebate(res);
+      if (res.debateDecisionId) storePartnerDecisionId(res.debateDecisionId);
       toast.success(`Moderator: ${res.synthesis.stance.toUpperCase()}`);
     },
     onError: (e) => toast.error((e as Error).message || "Debate failed"),
@@ -351,7 +355,9 @@ function PartnerInner() {
     decide.mutate(
       { actionType: primaryActionType, userChoice: "approved" },
       {
-        onSuccess: () => {
+        onSuccess: (res) => {
+          storePartnerDecisionId(res.decision.id);
+          setLastDecisionId(res.decision.id);
           toast.success("Approved — go to Sign & verify on Wealth");
         },
       },
@@ -407,7 +413,7 @@ function PartnerInner() {
 
         {answers ? (
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <DigestCard title="What changed" lines={answers.whatChanged} />
+            <DigestCard title="What changed" lines={answers.whatChanged.map(formatChangedLine)} />
             <DigestCard title="Why" lines={answers.whyChanged} />
             <DigestCard
               title="Weaker theses"
@@ -646,7 +652,14 @@ function PartnerInner() {
             <Clock3 className="mr-1.5 h-3.5 w-3.5" />
             Wait
           </Button>
-          <Link to="/app/wealth" search={{ tab: "trade" }} className="ml-auto">
+          <Link
+            to="/app/wealth"
+            search={{
+              tab: "trade",
+              ...(lastDecisionId ? { decisionId: lastDecisionId } : {}),
+            }}
+            className="ml-auto"
+          >
             <Button variant={lastDecisionId ? "default" : "ghost"} size="sm">
               4 · Sign & verify
             </Button>
@@ -710,32 +723,44 @@ function PartnerInner() {
             {(timeline.data?.entries ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">No decisions yet — Choose above.</p>
             ) : (
-              <div className="divide-y divide-border/40">
-                {(timeline.data?.entries ?? []).slice(0, 8).map((e) => (
-                  <div key={`${e.type}-${e.id}`} className="flex flex-wrap items-start justify-between gap-3 py-3">
-                    <div>
-                      <div className="font-mono text-[10px] uppercase text-muted-foreground">
-                        {e.type} · {relTime(e.at)}
-                      </div>
-                      <div className="text-sm">{e.title}</div>
-                      {replayId === e.id && replayText ? (
-                        <p className="mt-1 text-xs text-accent-1">{replayText}</p>
-                      ) : null}
+              <div className="space-y-4">
+                {groupByWeek(timeline.data?.entries ?? []).map((week) => (
+                  <div key={week.label}>
+                    <div className="mb-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {week.label}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {e.type === "decision" ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={runReplay.isPending}
-                          onClick={() => runReplay.mutate(e.id)}
+                    <div className="divide-y divide-border/40 border-l border-border/40 pl-3">
+                      {week.entries.map((e) => (
+                        <div
+                          key={`${e.type}-${e.id}`}
+                          className="flex flex-wrap items-start justify-between gap-3 py-3"
                         >
-                          Replay
-                        </Button>
-                      ) : null}
-                      <Badge variant="outline" className="font-mono text-[10px]">
-                        {e.outcome ?? "PENDING"}
-                      </Badge>
+                          <div>
+                            <div className="font-mono text-[10px] uppercase text-muted-foreground">
+                              {e.type} · {relTime(e.at)}
+                            </div>
+                            <div className="text-sm">{e.title}</div>
+                            {replayId === e.id && replayText ? (
+                              <p className="mt-1 text-xs text-accent-1">{replayText}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {e.type === "decision" ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={runReplay.isPending}
+                                onClick={() => runReplay.mutate(e.id)}
+                              >
+                                Replay
+                              </Button>
+                            ) : null}
+                            <Badge variant="outline" className="font-mono text-[10px]">
+                              {e.outcome ?? "PENDING"}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -765,7 +790,8 @@ function PartnerInner() {
               <div className="space-y-2">
                 {(changed.data?.deltas ?? []).slice(0, 8).map((d) => (
                   <div key={d.field} className="text-xs text-muted-foreground">
-                    <span className="font-mono">{d.field}</span>: {String(d.from ?? "—")} → {String(d.to ?? "—")}
+                    <span className="font-mono">{d.field}</span>: {formatPulseDelta(d.from)} →{" "}
+                    {formatPulseDelta(d.to)}
                   </div>
                 ))}
               </div>
@@ -797,6 +823,27 @@ function PartnerInner() {
       </Panel>
     </div>
   );
+}
+
+function formatChangedLine(line: string): string {
+  const m = line.match(/^([^:]+):\s*(.+?)\s*→\s*(.+)$/);
+  if (!m) return line;
+  return `${m[1]}: ${formatPulseDelta(m[2])} → ${formatPulseDelta(m[3])}`;
+}
+
+function groupByWeek(entries: TimelineEntry[]): Array<{ label: string; entries: TimelineEntry[] }> {
+  const weeks = new Map<string, TimelineEntry[]>();
+  for (const e of entries.slice(0, 24)) {
+    const d = new Date(e.at);
+    const start = new Date(d);
+    start.setUTCDate(d.getUTCDate() - d.getUTCDay());
+    start.setUTCHours(0, 0, 0, 0);
+    const label = `Week of ${start.toISOString().slice(0, 10)}`;
+    const list = weeks.get(label) ?? [];
+    list.push(e);
+    weeks.set(label, list);
+  }
+  return [...weeks.entries()].map(([label, weekEntries]) => ({ label, entries: weekEntries }));
 }
 
 function DigestCard({ title, lines }: { title: string; lines: string[] }) {
