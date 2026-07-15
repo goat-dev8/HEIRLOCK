@@ -58,12 +58,19 @@ function CapabilityBadge({
   if (!symbol) return null;
   const state = q.data?.capability?.state ?? "UNVERIFIED";
   const buyable = q.data?.buyable === true;
+  const label = buyable
+    ? "Tradeable"
+    : state === "CANCEL_ONLY"
+      ? "Cancel only"
+      : state === "UNVERIFIED"
+        ? "Checking…"
+        : state.replace(/_/g, " ").toLowerCase();
   return (
     <Badge
       variant="outline"
       title={q.data?.note}
       className={
-        "font-mono text-[10px] uppercase " +
+        "text-xs font-medium capitalize tracking-wide " +
         (buyable
           ? "border-emerald-500/40 text-emerald-300"
           : state === "CANCEL_ONLY"
@@ -71,7 +78,7 @@ function CapabilityBadge({
             : "border-border/60 text-muted-foreground")
       }
     >
-      {state}
+      {label}
     </Badge>
   );
 }
@@ -79,13 +86,18 @@ function CapabilityBadge({
 export function TradingWorkspace({ decisionId }: { decisionId?: string }) {
   const [network] = useNetwork();
   const [market, setMarket] = useState<"spot" | "perps">("spot");
+  const [showAllMarkets, setShowAllMarkets] = useState(false);
   const symbols = useSodexSymbols(network, market);
   const account = useSodexAccount();
   const gateways = useSodexGateways(network);
   const verify = useVerifySodexAccount();
   const [symbol, setSymbol] = useState<string | undefined>(undefined);
   const list = symbols.data?.symbols ?? [];
-  const active = list.find((s) => s.symbol === symbol) ?? list[0];
+  const priced = list.filter((s) => Number(s.price ?? 0) > 0);
+  const visible = (showAllMarkets || priced.length === 0 ? list : priced)
+    .slice()
+    .sort((a, b) => Number(b.price ?? 0) - Number(a.price ?? 0));
+  const active = list.find((s) => s.symbol === symbol) ?? visible[0] ?? list[0];
   const activeSymbol = active?.symbol;
   const orderbook = useSodexOrderbook(network, market, activeSymbol);
 
@@ -98,7 +110,7 @@ export function TradingWorkspace({ decisionId }: { decisionId?: string }) {
         <EmptyState
           icon={<TrendingUp className="h-8 w-8" />}
           title="Enable SoDEX trading first"
-          description="Open official SoDEX, Enable Trading with this wallet, then verify here so HEIRLOCK can store your aid."
+          description="Open official SoDEX, enable trading with this wallet, then verify once here."
           action={
             <div className="flex flex-wrap justify-center gap-2">
               <a href={account.data?.enableTradingUrl ?? sodexUrl} target="_blank" rel="noreferrer">
@@ -110,9 +122,9 @@ export function TradingWorkspace({ decisionId }: { decisionId?: string }) {
                 onClick={async () => {
                   try {
                     const res = await verify.mutateAsync();
-                    toast.success(`Verified aid ${res.accountId}`);
+                    toast.success(`Verified · account ${res.accountId}`);
                   } catch (e) {
-                    toast.error((e as Error).message || "Verify failed — Enable Trading first");
+                    toast.error((e as Error).message || "Verify failed — enable trading on SoDEX first");
                   }
                 }}
               >
@@ -135,44 +147,58 @@ export function TradingWorkspace({ decisionId }: { decisionId?: string }) {
             <TabsTrigger value="perps">Perps</TabsTrigger>
           </TabsList>
         </Tabs>
-        <Badge variant="outline" className="font-mono text-[10px] uppercase">
+        <Badge variant="outline" className="text-xs font-medium uppercase tracking-[0.12em]">
           {network}
         </Badge>
         <CapabilityBadge symbol={activeSymbol} network={network} />
         {network === "mainnet" && (
-          <Badge className="border-warning/40 bg-warning/10 text-warning font-mono text-[10px] uppercase">
+          <Badge className="border-warning/40 bg-warning/10 text-warning text-xs font-medium uppercase tracking-[0.12em]">
             Mainnet cap {usd(cap)}
           </Badge>
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[280px_1fr_360px]">
+      <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)_340px]">
         <Panel>
-          <PanelHeader title="Markets" description="SoDEX symbols" />
-          <div className="max-h-[520px] overflow-y-auto">
+          <PanelHeader
+            title="Markets"
+            description="Pick a pair"
+            action={
+              priced.length > 0 && priced.length < list.length ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowAllMarkets((v) => !v)}
+                >
+                  {showAllMarkets ? "Priced only" : `All (${list.length})`}
+                </Button>
+              ) : undefined
+            }
+          />
+          <div className="max-h-[360px] overflow-y-auto lg:max-h-[420px]">
             {symbols.isLoading ? (
               <div className="space-y-1 p-3">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <Skeleton key={i} className="h-9 rounded-md" />
                 ))}
               </div>
-            ) : list.length === 0 ? (
-              <div className="p-6 text-sm text-muted-foreground">No symbols returned.</div>
+            ) : visible.length === 0 ? (
+              <div className="p-6 text-[15px] text-muted-foreground">No markets available.</div>
             ) : (
-              <ul className="divide-y divide-border/40 text-sm">
-                {list.map((s) => (
+              <ul className="divide-y divide-border/40 text-[15px]">
+                {visible.map((s) => (
                   <li key={s.symbol}>
                     <button
                       onClick={() => setSymbol(s.symbol)}
                       className={
-                        "flex w-full items-center justify-between px-4 py-2.5 text-left transition-colors " +
+                        "flex w-full items-center justify-between px-4 py-3 text-left transition-colors " +
                         (activeSymbol === s.symbol
                           ? "bg-surface-2 text-foreground"
                           : "text-muted-foreground hover:bg-surface-2/60 hover:text-foreground")
                       }
                     >
-                      <span className="font-mono">{s.displayName ?? s.symbol}</span>
-                      <span className="tabular-nums text-xs">{s.price ? usd(s.price) : "—"}</span>
+                      <span className="font-medium">{s.displayName ?? s.symbol}</span>
+                      <span className="tabular-nums text-sm">{s.price ? usd(s.price) : "—"}</span>
                     </button>
                   </li>
                 ))}
@@ -184,18 +210,18 @@ export function TradingWorkspace({ decisionId }: { decisionId?: string }) {
         <Panel>
           <PanelHeader
             title={activeSymbol ?? "Select a market"}
-            description={`${market.toUpperCase()} · ${network}`}
+            description={`${market === "spot" ? "Spot" : "Perps"} · ${network}`}
           />
           <div className="grid grid-cols-2 gap-3 p-4 text-xs">
             <div>
-              <div className="mb-1.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <div className="mb-1.5 flex items-center justify-between text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 <span>Bids</span>
                 <span>Size</span>
               </div>
               <BookSide side="bid" rows={orderbook.data?.bids ?? []} loading={orderbook.isLoading} />
             </div>
             <div>
-              <div className="mb-1.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <div className="mb-1.5 flex items-center justify-between text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 <span>Asks</span>
                 <span>Size</span>
               </div>
@@ -316,7 +342,7 @@ function OrderTicket({
 
   async function prepare() {
     if (!symbol || !address || !symbolID) {
-      toast.error("Select a market with a valid symbolID");
+      toast.error("Select a market first");
       return;
     }
     setPreparing(true);
@@ -356,7 +382,7 @@ function OrderTicket({
         suggestedNonce: String(res.suggestedNonce ?? Date.now()),
         notionalUsd: notional,
       });
-      toast.success("Order prepared. Sign EIP-712 ExchangeAction to place.");
+      toast.success("Order ready — sign in your wallet to place.");
     } catch (e) {
       toast.error((e as Error).message || "Prepare failed");
     } finally {
@@ -464,11 +490,11 @@ function OrderTicket({
   return (
     <Panel>
       <PanelHeader
-        title="Order ticket"
+        title="Order"
         description={
           symbol
-            ? `${side.toUpperCase()} ${symbol}${symbolID ? ` · id ${symbolID}` : ""}`
-            : "Select a market"
+            ? `${side === "buy" ? "Buy" : "Sell"} ${symbol.replace(/_/g, "/")}`
+            : "Choose a market to continue"
         }
       />
       <div className="space-y-3 p-4">
@@ -484,7 +510,7 @@ function OrderTicket({
         </Tabs>
 
         <div className="space-y-1.5">
-          <Label className="font-mono text-[10px] uppercase tracking-widest">Price</Label>
+          <Label className="text-xs font-medium uppercase tracking-[0.12em]">Price</Label>
           <Input
             value={price}
             onChange={(e) => setPrice(e.target.value)}
@@ -494,7 +520,7 @@ function OrderTicket({
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="font-mono text-[10px] uppercase tracking-widest">Quantity</Label>
+          <Label className="text-xs font-medium uppercase tracking-[0.12em]">Quantity</Label>
           <Input
             value={size}
             onChange={(e) => setSize(e.target.value)}
@@ -535,8 +561,8 @@ function OrderTicket({
           </Button>
         )}
 
-        <div className="pt-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          EIP-712 ExchangeAction · 0x01 apiSign · non-custodial
+        <div className="pt-1 text-sm text-muted-foreground">
+          Signed in your wallet · non-custodial · under policy
         </div>
       
 

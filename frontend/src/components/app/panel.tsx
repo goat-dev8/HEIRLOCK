@@ -36,10 +36,12 @@ export function PanelHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start justify-between gap-4 border-b border-border/50 px-5 py-4", className)}>
+    <div className={cn("flex items-start justify-between gap-4 border-b border-border/40 px-6 py-5", className)}>
       <div className="min-w-0">
-        <div className="font-display text-[13px] font-medium tracking-tight text-foreground">{title}</div>
-        {description && <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>}
+        <div className="font-display text-lg font-medium tracking-tight text-foreground sm:text-xl">{title}</div>
+        {description && (
+          <div className="mt-1.5 max-w-2xl text-[15px] leading-relaxed text-muted-foreground">{description}</div>
+        )}
       </div>
       {action}
     </div>
@@ -58,10 +60,10 @@ export function Stat({
   className?: string;
 }) {
   return (
-    <div className={cn("space-y-1 rounded-lg border border-border/50 bg-surface-1 p-4", className)}>
-      <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
-      <div className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">{value}</div>
-      {hint && <div className="text-[11px] text-muted-foreground">{hint}</div>}
+    <div className={cn("space-y-1.5 rounded-xl border border-border/40 bg-surface-1 p-5", className)}>
+      <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
+      <div className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">{value}</div>
+      {hint && <div className="text-sm text-muted-foreground">{hint}</div>}
     </div>
   );
 }

@@ -18,18 +18,21 @@ function SettingsPage() {
   const [network] = useNetwork();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">System</div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Settings</h1>
+    <div className="mx-auto max-w-3xl space-y-8 pb-12">
+      <div className="fade-rise space-y-3">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Account</p>
+        <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Settings</h1>
+        <p className="max-w-xl text-lg leading-relaxed text-muted-foreground">
+          Session, network, and environment — kept simple on purpose.
+        </p>
       </div>
 
       <Panel>
-        <PanelHeader title="Session" description="Wallet + SIWE" />
+        <PanelHeader title="Session" description="Your wallet session" />
         <div className="flex items-center justify-between gap-4 px-5 py-4">
           <div className="text-sm">
-            <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Address</div>
-            <div className="mt-1 font-mono text-xs">{me.data?.address ?? "not signed in"}</div>
+            <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Address</div>
+            <div className="mt-1.5 font-mono text-sm">{me.data?.address ?? "not signed in"}</div>
           </div>
           <ConnectButton />
         </div>
@@ -46,7 +49,7 @@ function SettingsPage() {
       </Panel>
 
       <Panel>
-        <PanelHeader title="Environment" description="/api/config/environment" />
+        <PanelHeader title="Environment" description="Where this app is pointed" />
         {cfg.isLoading ? (
           <Skeleton className="mx-5 my-4 h-40 rounded-md" />
         ) : (

@@ -5,7 +5,6 @@ import { env } from "@/lib/env";
 import { EmptyState, Panel, PanelHeader, Stat } from "@/components/app/panel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { num, usd } from "@/lib/format";
 import { ArrowUpRight, Wallet, ShieldCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -116,16 +115,15 @@ export function PortfolioInner() {
         <Stat
           label="Portfolio value"
           value={hasUsd ? usd(totalUsd) : "Unavailable"}
-          hint={totals?.note ?? `${balances.length} assets · SoDEX lastPx marks`}
+          hint={totals?.note ?? `${balances.length} assets · live marks`}
         />
         <Stat label="Open orders" value={orders.length} hint="Signed by your wallet" />
-        <Stat label="Policy cap" value={usd(cap)} hint="On-chain WealthPolicy" />
+        <Stat label="Policy cap" value={usd(cap)} hint="On-chain policy limit" />
       </div>
-      <div className="rounded-lg border border-border/60 bg-surface-1/70 px-4 py-3 text-sm text-muted-foreground">
-        <span className="text-foreground">Flow:</span> Enable Trading on SoDEX → Verify aid → balances
-        mark to USD via spot tickers (vUSDC = $1).{" "}
+      <div className="rounded-xl border border-border/60 bg-surface-1/70 px-5 py-4 text-[15px] leading-relaxed text-muted-foreground">
+        Enable Trading on SoDEX, verify once, then balances mark to USD here.{" "}
         <Link to="/app/wealth" search={{ tab: "trade" }} className="text-accent-1 hover:underline">
-          Trade
+          Place a trade
         </Link>
       </div>
 
@@ -232,7 +230,7 @@ export function PortfolioInner() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {trades.map((t, i) => {
+                  {trades.slice(0, 8).map((t, i) => {
                     const row = t as Record<string, unknown>;
                     const key = String(row.tradeID ?? row.tradeId ?? row.id ?? i);
                     return (
@@ -261,11 +259,12 @@ export function PortfolioInner() {
       <Panel tone="accent" className="p-5">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-5 w-5 text-accent-1" />
-          <div className="text-sm">
-            <div className="font-medium text-foreground">Verified account · <Badge variant="outline" className="ml-1 font-mono text-[10px]">{network}</Badge></div>
-            <div className="mt-1 text-muted-foreground">
-              aid <span className="font-mono text-xs">{account.data?.aid ?? "—"}</span>. Every order you place is signed
-              client-side with EIP-712 and relayed under policy. Mainnet notional is capped at {usd(cap)}.
+          <div className="text-[15px] leading-relaxed">
+            <div className="font-medium text-foreground">
+              Verified · <span className="capitalize text-muted-foreground">{network}</span>
+            </div>
+            <div className="mt-1.5 text-muted-foreground">
+              Every order is signed in your wallet and checked against policy. Cap {usd(cap)}.
             </div>
           </div>
         </div>

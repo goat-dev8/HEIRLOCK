@@ -15,11 +15,13 @@ function ContractsPage() {
   const { data, isLoading } = useContractsConfig();
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">System</div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Contracts</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Live ValueChain addresses (mainnet + testnet).</p>
+    <div className="mx-auto max-w-5xl space-y-8 pb-12">
+      <div className="fade-rise space-y-3">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">On-chain</p>
+        <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Contracts</h1>
+        <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
+          Policy, continuity, and action log addresses on ValueChain — yours to verify on the explorer.
+        </p>
       </div>
       {isLoading ? (
         <Skeleton className="h-64 rounded-xl" />

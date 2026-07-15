@@ -10,19 +10,19 @@ export const PRIMARY_NAV = [
   {
     to: "/app/living" as const,
     label: "Partner",
-    description: "Pulse · Debate · Decide",
+    description: "What changed",
     icon: Scale,
   },
   {
     to: "/app/wealth" as const,
     label: "Wealth",
-    description: "Sign under policy",
+    description: "Holdings & trade",
     icon: Wallet,
   },
   {
     to: "/app/continuity" as const,
     label: "Continuity",
-    description: "Modes and proof",
+    description: "Alive · Guardian · Heir",
     icon: Shield,
   },
 ] as const;

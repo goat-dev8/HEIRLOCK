@@ -22,11 +22,13 @@ import {
   Scale,
   ShieldAlert,
   ShieldQuestion,
-  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { pctPoints, relTime, usd } from "@/lib/format";
 import { formatPulseDelta, storePartnerDecisionId } from "@/lib/partner-handoff";
+import { PartnerJourneyStory } from "@/components/app/partner-journey-story";
+import { EvidenceFlowStory } from "@/components/app/evidence-flow-story";
+import { motion } from "framer-motion";
 
 const learnSearchSchema = z.object({
   learn: z.enum(["timeline", "theses", "changed", "lessons"]).catch("timeline"),
@@ -137,14 +139,12 @@ type DebateResult = {
 
 function LivingPage() {
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          Living Investment Partner
-        </div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Partner</h1>
-        <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-          It kept thinking while you were away. See what changed → debate → decide → verify → learn.
+    <div className="mx-auto max-w-3xl space-y-8 pb-16">
+      <div className="fade-rise space-y-3">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Living Investment Partner</p>
+        <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">While you were away</h1>
+        <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
+          Your Partner already re-checked the market, challenged open theses, and prepared the next decision.
         </p>
       </div>
       <RequireAuth>
@@ -216,16 +216,6 @@ function PartnerInner() {
         }>;
         lessons: Array<{ thesisId: string; statement: string; status: string; resolvedAt: string }>;
       }>("/api/fo/partner/memory", { auth: true }),
-    enabled: !!token,
-  });
-
-  const changed = useQuery({
-    queryKey: ["fo", "partner", "changed", token],
-    queryFn: () =>
-      api<{ status: string; deltas: Array<{ field: string; from: unknown; to: unknown }> }>(
-        "/api/fo/partner/changed",
-        { auth: true },
-      ),
     enabled: !!token,
   });
 
@@ -315,7 +305,7 @@ function PartnerInner() {
   }
 
   const data = brief.data!;
-  const { proposal, drift, preflight, citations, pulse, dna, falsify, radar, openTheses, livingPortfolio, evidenceGraph: graphMeta, policy, continuityGate } = data;
+  const { proposal, drift, preflight, citations, pulse, dna, falsify, radar, livingPortfolio, evidenceGraph: graphMeta, policy, continuityGate } = data;
   const answers = pulse?.answers;
   const verdict = String(preflight.verdict ?? "CAUTION");
   const liveCount = citations.filter((c) => c.status === "LIVE").length;
@@ -331,13 +321,13 @@ function PartnerInner() {
     !continuityBlocked &&
     continuityGate?.canApprove !== false;
   const blockReason = !debate
-    ? "Run Counsel → Falsifier → Moderator debate first."
+    ? "Run the debate first — Counsel, Falsifier, then Moderator."
     : continuityBlocked
       ? continuityGate?.blockReason
       : verdict === "BLOCK"
-        ? "Preflight BLOCK"
+        ? "Policy blocked this recommendation"
         : !policyLive
-          ? "On-chain WealthPolicy UNAVAILABLE"
+          ? "On-chain wealth policy is unavailable right now"
           : null;
 
   function approve() {
@@ -377,16 +367,22 @@ function PartnerInner() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-8">
+      <PartnerJourneyStory active={debate ? (canApproveNow ? 2 : 1) : 0} />
+
+      <motion.div
+        className="flex flex-wrap items-center gap-3"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
         <DataBadge status="LIVE" />
-        <span className="text-xs text-muted-foreground">
+        <span className="text-[15px] text-muted-foreground">
           Pulsed {pulse?.ranAt ? relTime(pulse.ranAt) : relTime(data.ts)}
         </span>
         {dna ? (
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-border/50 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-accent-1">
-            <Sparkles className="h-3 w-3" />
-            DNA · {dna.archetype}
+          <span className="rounded-full border border-border/50 bg-surface-0 px-3 py-1 text-sm text-foreground/90">
+            Style · {dna.archetype === "Falsifier" ? "Challenger" : dna.archetype === "Counsel" ? "Advocate" : dna.archetype}
           </span>
         ) : null}
         <Button
@@ -397,185 +393,163 @@ function PartnerInner() {
           disabled={forcePulse.isPending || brief.isFetching}
         >
           <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${forcePulse.isPending || brief.isFetching ? "animate-spin" : ""}`} />
-          Pulse again
+          Refresh
         </Button>
-      </div>
+      </motion.div>
 
-      {/* 1 · What changed while away */}
-      <Panel tone="accent" className="p-6">
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-1">
-          1 · While you were away
-        </div>
-        <h2 className="mt-2 font-display text-2xl font-semibold leading-snug tracking-tight">
-          {data.headline}
-        </h2>
-        {data.rationale ? <p className="mt-2 text-sm text-muted-foreground">{data.rationale}</p> : null}
-
-        {answers ? (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <DigestCard title="What changed" lines={answers.whatChanged.map(formatChangedLine)} />
-            <DigestCard title="Why" lines={answers.whyChanged} />
-            <DigestCard
-              title="Weaker theses"
-              lines={
-                answers.weakerTheses.length
-                  ? answers.weakerTheses.map((t) => `${t.from}→${t.to}% · ${t.statement.slice(0, 72)}`)
-                  : ["None this pulse"]
-              }
-            />
-            <DigestCard
-              title="Stronger theses"
-              lines={
-                answers.strongerTheses.length
-                  ? answers.strongerTheses.map((t) => `${t.from}→${t.to}% · ${t.statement.slice(0, 72)}`)
-                  : ["None this pulse"]
-              }
-            />
-            <DigestCard
-              title="Opportunities"
-              lines={
-                answers.opportunitiesAppeared.length
-                  ? answers.opportunitiesAppeared
-                  : ["No new forced window"]
-              }
-            />
-            <DigestCard
-              title="Self-criticism"
-              lines={
-                answers.wrongRecommendations.length
-                  ? answers.wrongRecommendations.map((w) => w.lesson)
-                  : ["No approval regrets detected"]
-              }
-            />
-          </div>
-        ) : null}
-
-        <Collapsible open={whyOpen} onOpenChange={setWhyOpen} className="mt-4">
-          <CollapsibleTrigger asChild>
-            <button type="button" className="inline-flex items-center gap-1.5 text-xs font-medium text-accent-1 hover:underline">
-              <ShieldQuestion className="h-3.5 w-3.5" />
-              Proof · {liveCount}/{citations.length} LIVE
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${whyOpen ? "rotate-180" : ""}`} />
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="mt-3 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {citations.map((c) => (
-                <span
-                  key={c.endpoint}
-                  className="inline-flex items-center gap-2 rounded-md border border-border/50 bg-surface-0/60 px-2.5 py-1 font-mono text-[10px] uppercase"
-                >
-                  {c.source}
-                  <DataBadge status={c.status === "LIVE" ? "LIVE" : "UNAVAILABLE"} />
-                </span>
-              ))}
-            </div>
-            {drift?.signal ? (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Stat label="Terminal 24h" value={pctPoints(drift.terminalChange24hPct)} hint="OpenAPI index" />
-                <Stat
-                  label={`${proposal.onChainToken?.symbol ?? "Token"} 24h`}
-                  value={pctPoints(drift.tokenChange24hPct)}
-                  hint={proposal.onChainToken?.priceUsd != null ? usd(proposal.onChainToken.priceUsd) : "Base"}
-                />
-                <Stat label="Drift" value={drift.driftPct != null ? `${drift.driftPct.toFixed(1)}%` : "—"} hint="|Δ|" />
-              </div>
+      <Panel tone="accent" className="overflow-hidden p-0">
+        <div className="space-y-6 p-7 sm:p-8">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-accent-1">What changed</p>
+            <h2 className="mt-2 font-display text-3xl font-semibold leading-snug tracking-tight sm:text-4xl">
+              {data.headline}
+            </h2>
+            {data.rationale ? (
+              <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted-foreground">{data.rationale}</p>
             ) : null}
-            <p className="text-xs text-muted-foreground">
-              Preflight <span className="font-mono uppercase">{verdict}</span> — LLM cannot override.
-            </p>
-          </CollapsibleContent>
-        </Collapsible>
-      </Panel>
-
-      {livingPortfolio ? (
-        <Panel className="p-5">
-          <PanelHeader title="Living portfolio" description="Why allocation, risk, and confidence changed" />
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <DigestCard title="Allocation" lines={[livingPortfolio.narratives.allocation]} />
-            <DigestCard title="Risk" lines={[livingPortfolio.narratives.risk]} />
-            <DigestCard title="Confidence" lines={[livingPortfolio.narratives.confidence]} />
           </div>
-          {livingPortfolio.recentShifts.length > 0 ? (
-            <div className="mt-3">
-              <DigestCard title="Recent shifts" lines={livingPortfolio.recentShifts} />
+
+          {answers ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DigestCard title="Market move" lines={answers.whatChanged.map(formatChangedLine)} />
+              <DigestCard title="Why it matters" lines={answers.whyChanged.map(humanizeCopy)} />
+              <DigestCard
+                title="Theses under pressure"
+                lines={
+                  answers.weakerTheses.length
+                    ? answers.weakerTheses.map((t) => `${t.from}→${t.to}% · ${t.statement.slice(0, 72)}`)
+                    : ["None this pulse"]
+                }
+              />
+              <DigestCard
+                title="Opportunity"
+                lines={
+                  (radar ?? []).length
+                    ? (radar ?? []).slice(0, 2).map((r) => r.title)
+                    : answers.opportunitiesAppeared.length
+                      ? answers.opportunitiesAppeared
+                      : ["No forced window"]
+                }
+              />
             </div>
           ) : null}
-          <p className="mt-2 text-xs text-muted-foreground">
-            {livingPortfolio.holdings.note} · {livingPortfolio.holdings.assetCount} asset(s)
-          </p>
-        </Panel>
-      ) : null}
+
+          {livingPortfolio ? (
+            <p className="border-t border-border/40 pt-5 text-[15px] leading-relaxed text-muted-foreground">
+              <span className="text-foreground">{livingPortfolio.narratives.confidence}</span>
+              {" · "}
+              {livingPortfolio.narratives.risk}
+            </p>
+          ) : null}
+
+          <Collapsible open={whyOpen} onOpenChange={setWhyOpen}>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 text-[15px] font-medium text-accent-1 hover:underline"
+              >
+                <ShieldQuestion className="h-4 w-4" />
+                Evidence · {liveCount}/{citations.length} live
+                <ChevronDown className={`h-4 w-4 transition-transform ${whyOpen ? "rotate-180" : ""}`} />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-4 space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {citations.map((c) => (
+                  <span
+                    key={c.endpoint}
+                    className="inline-flex items-center gap-2 rounded-lg border border-border/50 bg-surface-0/60 px-3 py-1.5 text-sm"
+                  >
+                    {humanSource(c.source)}
+                    <DataBadge status={c.status === "LIVE" ? "LIVE" : "UNAVAILABLE"} />
+                  </span>
+                ))}
+              </div>
+              {drift?.signal ? (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Stat label="Terminal 24h" value={pctPoints(drift.terminalChange24hPct)} hint="Index" />
+                  <Stat
+                    label={`${proposal.onChainToken?.symbol ?? "Token"} 24h`}
+                    value={pctPoints(drift.tokenChange24hPct)}
+                    hint={proposal.onChainToken?.priceUsd != null ? usd(proposal.onChainToken.priceUsd) : "On-chain"}
+                  />
+                  <Stat label="Drift" value={drift.driftPct != null ? `${drift.driftPct.toFixed(1)}%` : "—"} hint="|Δ|" />
+                </div>
+              ) : null}
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      </Panel>
 
       {(falsify ?? []).length > 0 ? (
-        <Panel className="border-amber-500/30 p-5">
-          <PanelHeader title="Falsification pressure" description="Kill conditions vs live evidence" />
-          <div className="mt-3 space-y-2">
-            {(falsify ?? []).map((f) => (
-              <div key={f.thesisId} className="rounded-md border border-border/40 px-3 py-2">
-                <div className="flex items-center gap-2 font-mono text-[10px] uppercase text-amber-200">
-                  <ShieldAlert className="h-3.5 w-3.5" />
-                  {f.severity}
+        <Panel className="border-amber-500/25 p-6">
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-amber-200">Needs your attention</p>
+          <div className="mt-4 space-y-3">
+            {(falsify ?? []).slice(0, 2).map((f) => (
+              <div key={f.thesisId} className="rounded-xl border border-border/40 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-amber-100">
+                  <ShieldAlert className="h-4 w-4" />
+                  {f.severity === "broken" ? "Broken" : "Under pressure"}
                 </div>
-                <div className="mt-1 text-sm">{f.statement}</div>
-                <p className="mt-1 text-xs text-muted-foreground">{f.reason}</p>
+                <p className="mt-2 text-base leading-relaxed">{f.statement}</p>
+                <p className="mt-1.5 text-[15px] text-muted-foreground">{f.reason}</p>
               </div>
             ))}
           </div>
         </Panel>
       ) : null}
 
-      {(radar ?? []).length > 0 ? (
-        <Panel className="p-5">
-          <PanelHeader title="Radar" description="Policy-safe windows" />
-          <div className="mt-3 space-y-2">
-            {(radar ?? []).map((r) => (
-              <div key={r.id} className="flex justify-between gap-2 rounded-md border border-border/40 px-3 py-2">
-                <div>
-                  <div className="text-sm font-medium">{r.title}</div>
-                  <div className="text-xs text-muted-foreground">{r.detail}</div>
-                </div>
-                <span className="font-mono text-[10px] uppercase text-muted-foreground">{r.urgency}</span>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      ) : null}
-
-      {/* 2 · Debate */}
-      <Panel className="p-5">
+      <Panel className="p-6 sm:p-7">
         <PanelHeader
-          title="2 · Debate"
-          description="Counsel → Falsifier → Moderator. Memory-bound. Cited."
+          title="Debate"
+          description="Counsel defends. Falsifier attacks. Moderator decides — from your memory and live evidence only."
+          className="border-0 px-0 py-0"
         />
-        <Button className="mt-3" variant="secondary" onClick={() => runDebate.mutate()} disabled={runDebate.isPending}>
-          <Scale className="mr-1.5 h-3.5 w-3.5" />
-          {runDebate.isPending ? "Debating…" : debate ? "Re-run debate" : "Run full debate"}
+        <Button className="mt-5" variant="secondary" onClick={() => runDebate.mutate()} disabled={runDebate.isPending}>
+          <Scale className="mr-1.5 h-4 w-4" />
+          {runDebate.isPending ? (
+            <span className="inline-flex items-center gap-2">
+              Debating
+              <span className="inline-flex gap-1">
+                <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-current" />
+                <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-current [animation-delay:0.2s]" />
+                <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-current [animation-delay:0.4s]" />
+              </span>
+            </span>
+          ) : debate ? (
+            "Re-run debate"
+          ) : (
+            "Run full debate"
+          )}
         </Button>
         {debate ? (
-          <div className="mt-4 space-y-3">
-            <div className="grid gap-3 md:grid-cols-2">
+          <motion.div
+            className="mt-6 space-y-4"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
               <SideCard tone="counsel" title="Counsel" body={debate.counsel.content} />
               <SideCard tone="falsifier" title="Falsifier" body={debate.falsifier.content} />
             </div>
             <SideCard tone="moderator" title="Moderator" body={debate.moderator.content} />
-            <div className="rounded-md border border-border/50 bg-surface-2/40 px-3 py-2.5">
-              <div className="font-mono text-[10px] uppercase text-muted-foreground">
-                Final · {debate.synthesis.stance} · {debate.synthesis.confidence}% · {debate.latencyMs}ms
+            <div className="rounded-xl border border-border/50 bg-surface-2/40 px-4 py-3.5">
+              <div className="text-sm text-muted-foreground">
+                Final · {debate.synthesis.stance} · {debate.synthesis.confidence}% confidence
               </div>
-              <p className="mt-1 text-sm">{debate.synthesis.summary}</p>
+              <p className="mt-1.5 text-base leading-relaxed">{debate.synthesis.summary}</p>
             </div>
             {debate.actionPlan ? (
-              <div className="rounded-md border border-accent-1/25 bg-surface-0/40 p-3">
-                <div className="font-mono text-[10px] uppercase tracking-wide text-accent-1">
-                  Action plan · {debate.actionPlan.primaryAction.replace(/_/g, " ")}
+              <div className="rounded-xl border border-accent-1/25 bg-surface-0/40 p-4">
+                <div className="text-sm font-medium text-accent-1">
+                  Next steps · {debate.actionPlan.primaryAction.replace(/_/g, " ")}
                 </div>
-                <ol className="mt-2 space-y-2">
+                <ol className="mt-3 space-y-3">
                   {debate.actionPlan.steps.map((step) => (
-                    <li key={step.id} className="text-xs">
-                      <span className="font-mono uppercase text-muted-foreground">{step.phase}</span>
-                      <div className="text-sm font-medium">{step.title}</div>
-                      <p className="text-muted-foreground">{step.detail}</p>
+                    <li key={step.id} className="text-[15px]">
+                      <div className="font-medium">{step.title}</div>
+                      <p className="mt-0.5 text-muted-foreground">{step.detail}</p>
                       {step.href ? (
                         step.href.startsWith("http") ? (
                           <a href={step.href} target="_blank" rel="noreferrer" className="text-accent-1 hover:underline">
@@ -583,7 +557,7 @@ function PartnerInner() {
                           </a>
                         ) : (
                           <Link to={step.href} className="text-accent-1 hover:underline">
-                            Go
+                            Continue
                           </Link>
                         )
                       ) : null}
@@ -592,156 +566,157 @@ function PartnerInner() {
                 </ol>
               </div>
             ) : null}
-          </div>
+          </motion.div>
         ) : (
-          <p className="mt-3 text-xs text-muted-foreground">Required before Approve. The Partner will not let impulse replace evidence.</p>
+          <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
+            Required before Approve. Impulse never replaces evidence.
+          </p>
         )}
       </Panel>
 
-      {/* Policy + Continuity gate */}
-      <Panel className={`p-5 ${!canApproveNow ? "border-amber-500/30" : ""}`}>
-        <PanelHeader
-          title="Policy · Continuity"
-          description="On-chain WealthPolicy gates every approval"
-        />
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <span className="rounded-md border border-border/50 px-2 py-1 font-mono uppercase">
-            Preflight {verdict}
-          </span>
-          <span className="rounded-md border border-border/50 px-2 py-1 font-mono uppercase">
-            Mode {policyMode}
-          </span>
+      <Panel className={`p-6 sm:p-7 ${!canApproveNow ? "border-amber-500/25" : ""}`}>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-full border border-border/50 px-3 py-1">Policy {verdict}</span>
+          <span className="rounded-full border border-border/50 px-3 py-1">Mode {policyMode}</span>
           {policy?.maxNotionalUsd != null ? (
-            <span className="rounded-md border border-border/50 px-2 py-1 font-mono">
-              Cap ${policy.maxNotionalUsd}
-            </span>
+            <span className="rounded-full border border-border/50 px-3 py-1">Cap ${policy.maxNotionalUsd}</span>
           ) : null}
-          <DataBadge status={policy?.source === "valuechain" ? "LIVE" : "UNAVAILABLE"} />
+          <DataBadge status={policyLive ? "LIVE" : "UNAVAILABLE"} />
         </div>
         {blockReason && !canApproveNow ? (
-          <p className="mt-2 text-sm text-amber-200">{blockReason}</p>
+          <p className="mt-3 text-base text-amber-100">{blockReason}</p>
         ) : (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Approve records intent only — Sign on Wealth executes under EIP-712.
+          <p className="mt-3 text-[15px] text-muted-foreground">
+            Approve records intent. Your wallet still signs every trade.
           </p>
         )}
         {!canApproveNow && continuityBlocked ? (
-          <Link to="/app/continuity" className="mt-2 inline-block text-xs text-accent-1 hover:underline">
+          <Link to="/app/continuity" className="mt-2 inline-block text-[15px] text-accent-1 hover:underline">
             Open Continuity →
           </Link>
         ) : null}
-      </Panel>
 
-      {/* 3 · Choose */}
-      <Panel className="p-5">
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">3 · Choose</div>
-        <p className="mt-1 text-sm text-muted-foreground">{proposal.title}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            onClick={approve}
-            disabled={!canApproveNow || decide.isPending}
-            variant={debateStance === "approve" ? "default" : "secondary"}
-          >
-            Approve <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
-          </Button>
-          <Button variant="secondary" onClick={challenge} disabled={decide.isPending}>
-            <Brain className="mr-1.5 h-3.5 w-3.5" />
-            Challenge
-          </Button>
-          <Button variant="ghost" onClick={wait} disabled={decide.isPending}>
-            <Clock3 className="mr-1.5 h-3.5 w-3.5" />
-            Wait
-          </Button>
-          <Link
-            to="/app/wealth"
-            search={{
-              tab: "trade",
-              ...(lastDecisionId ? { decisionId: lastDecisionId } : {}),
-            }}
-            className="ml-auto"
-          >
-            <Button variant={lastDecisionId ? "default" : "ghost"} size="sm">
-              4 · Sign & verify
+        <div className="mt-6 border-t border-border/40 pt-6">
+          <p className="font-display text-xl font-medium">{proposal.title}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              onClick={approve}
+              disabled={!canApproveNow || decide.isPending}
+              variant={debateStance === "approve" ? "default" : "secondary"}
+              size="lg"
+            >
+              Approve <ArrowUpRight className="ml-1.5 h-4 w-4" />
             </Button>
-          </Link>
+            <Button variant="secondary" size="lg" onClick={challenge} disabled={decide.isPending}>
+              <Brain className="mr-1.5 h-4 w-4" />
+              Challenge
+            </Button>
+            <Button variant="ghost" size="lg" onClick={wait} disabled={decide.isPending}>
+              <Clock3 className="mr-1.5 h-4 w-4" />
+              Wait
+            </Button>
+            <Link
+              to="/app/wealth"
+              search={{
+                tab: "trade",
+                ...(lastDecisionId ? { decisionId: lastDecisionId } : {}),
+              }}
+              className="ml-auto"
+            >
+              <Button variant={lastDecisionId ? "default" : "ghost"} size="lg">
+                Sign & verify
+              </Button>
+            </Link>
+          </div>
         </div>
       </Panel>
 
-      {/* Evidence graph */}
-      <Panel className="p-5">
-        <Collapsible open={evidenceOpen} onOpenChange={setEvidenceOpen}>
+      <Collapsible open={evidenceOpen} onOpenChange={setEvidenceOpen}>
+        <Panel className="space-y-4 p-5">
+          <EvidenceFlowStory />
           <CollapsibleTrigger asChild>
             <button type="button" className="flex w-full items-center justify-between text-left">
-              <PanelHeader
-                title="Evidence graph"
-                description={graphMeta?.summary ?? "Link proposal → citations → memory → policy"}
-              />
-              <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${evidenceOpen ? "rotate-180" : ""}`} />
+              <div>
+                <div className="font-display text-lg font-medium">Evidence graph</div>
+                <p className="mt-1 text-[15px] text-muted-foreground">
+                  {graphMeta?.summary
+                    ? humanizeCopy(graphMeta.summary)
+                    : "How this recommendation links to sources, memory, and policy"}
+                </p>
+              </div>
+              <ChevronDown className={`h-5 w-5 shrink-0 transition-transform ${evidenceOpen ? "rotate-180" : ""}`} />
             </button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="mt-3">
+          <CollapsibleContent className="mt-4">
             {evidenceGraph.isLoading ? (
-              <Skeleton className="h-24 rounded-md" />
+              <Skeleton className="h-24 rounded-xl" />
             ) : evidenceGraph.data ? (
               <div className="flex flex-wrap gap-2">
                 {evidenceGraph.data.nodes.slice(0, 12).map((n) => (
                   <span
                     key={n.id}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border/50 px-2 py-1 font-mono text-[10px] uppercase"
+                    className="inline-flex items-center gap-2 rounded-lg border border-border/50 px-3 py-1.5 text-sm"
                   >
-                    {n.kind}
-                    <span className="normal-case text-muted-foreground">{n.label.slice(0, 40)}</span>
+                    <span className="text-muted-foreground">{n.kind}</span>
+                    {n.label.slice(0, 36)}
                     {n.status ? <DataBadge status={n.status === "LIVE" ? "LIVE" : "UNAVAILABLE"} /> : null}
                   </span>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">Open to load provenance graph.</p>
+              <p className="text-[15px] text-muted-foreground">Open to load provenance.</p>
             )}
           </CollapsibleContent>
-        </Collapsible>
-      </Panel>
+        </Panel>
+      </Collapsible>
 
-
-      {/* 5 · Learn — Memory lives here */}
-      <Panel className="p-5">
-        <PanelHeader title="5 · Learn" description="Investment Memory — timeline, theses, lessons" />
+      <Panel className="p-6 sm:p-7">
+        <PanelHeader
+          title="Learn"
+          description="Replay past choices against today's market. Memory lives here."
+          className="border-0 px-0 py-0"
+        />
         <Tabs
-          value={learn}
+          value={learn === "changed" ? "timeline" : learn}
           onValueChange={(v) =>
-            navigate({ search: { learn: v as "timeline" | "theses" | "changed" | "lessons" } })
+            navigate({ search: { learn: v as "timeline" | "theses" | "lessons" } })
           }
-          className="mt-3"
+          className="mt-5"
         >
-          <TabsList>
-            <TabsTrigger value="timeline">Timeline</TabsTrigger>
-            <TabsTrigger value="theses">Theses</TabsTrigger>
-            <TabsTrigger value="changed">What changed</TabsTrigger>
-            <TabsTrigger value="lessons">Lessons</TabsTrigger>
+          <TabsList className="h-11">
+            <TabsTrigger value="timeline" className="text-[15px]">
+              Timeline
+            </TabsTrigger>
+            <TabsTrigger value="theses" className="text-[15px]">
+              Theses
+            </TabsTrigger>
+            <TabsTrigger value="lessons" className="text-[15px]">
+              Lessons
+            </TabsTrigger>
           </TabsList>
-          <TabsContent value="timeline" className="mt-3">
+          <TabsContent value="timeline" className="mt-5">
             {(timeline.data?.entries ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No decisions yet — Choose above.</p>
+              <p className="text-base text-muted-foreground">No decisions yet — Choose above.</p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {groupByWeek(timeline.data?.entries ?? []).map((week) => (
                   <div key={week.label}>
-                    <div className="mb-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <div className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
                       {week.label}
                     </div>
-                    <div className="divide-y divide-border/40 border-l border-border/40 pl-3">
+                    <div className="divide-y divide-border/40 border-l-2 border-accent-1/25 pl-4">
                       {week.entries.map((e) => (
                         <div
                           key={`${e.type}-${e.id}`}
-                          className="flex flex-wrap items-start justify-between gap-3 py-3"
+                          className="flex flex-wrap items-start justify-between gap-3 py-4"
                         >
                           <div>
-                            <div className="font-mono text-[10px] uppercase text-muted-foreground">
+                            <div className="text-sm text-muted-foreground">
                               {e.type} · {relTime(e.at)}
                             </div>
-                            <div className="text-sm">{e.title}</div>
+                            <div className="mt-0.5 text-base">{e.title}</div>
                             {replayId === e.id && replayText ? (
-                              <p className="mt-1 text-xs text-accent-1">{replayText}</p>
+                              <p className="mt-1.5 text-[15px] text-accent-1">{replayText}</p>
                             ) : null}
                           </div>
                           <div className="flex items-center gap-2">
@@ -755,7 +730,7 @@ function PartnerInner() {
                                 Replay
                               </Button>
                             ) : null}
-                            <Badge variant="outline" className="font-mono text-[10px]">
+                            <Badge variant="outline" className="text-xs">
                               {e.outcome ?? "PENDING"}
                             </Badge>
                           </div>
@@ -767,51 +742,38 @@ function PartnerInner() {
               </div>
             )}
           </TabsContent>
-          <TabsContent value="theses" className="mt-3 space-y-2">
+          <TabsContent value="theses" className="mt-5 space-y-3">
             {(memory.data?.theses ?? [])
               .filter((t) => t.status === "active" || t.status === "challenged")
               .map((t) => (
                 <div
                   key={t.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/40 px-3 py-2"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/40 px-4 py-3"
                 >
                   <div>
-                    <div className="text-sm">{t.statement}</div>
-                    <div className="font-mono text-[10px] uppercase text-muted-foreground">{t.status}</div>
+                    <div className="text-base leading-relaxed">{t.statement}</div>
+                    <div className="mt-1 text-sm capitalize text-muted-foreground">{t.status}</div>
                   </div>
-                  <span className="font-mono text-sm">{t.confidence}%</span>
+                  <span className="font-display text-2xl tabular-nums">{t.confidence}%</span>
                 </div>
               ))}
           </TabsContent>
-          <TabsContent value="changed" className="mt-3">
-            {changed.data?.status === "NO_BASELINE" ? (
-              <p className="text-sm text-muted-foreground">Baseline building — check back tomorrow.</p>
-            ) : (
-              <div className="space-y-2">
-                {(changed.data?.deltas ?? []).slice(0, 8).map((d) => (
-                  <div key={d.field} className="text-xs text-muted-foreground">
-                    <span className="font-mono">{d.field}</span>: {formatPulseDelta(d.from)} →{" "}
-                    {formatPulseDelta(d.to)}
-                  </div>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-          <TabsContent value="lessons" className="mt-3 space-y-2">
-            {(learning.data?.lessons ?? []).length === 0 &&
-            (memory.data?.lessons ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">Lessons appear after outcomes and fill verification.</p>
+          <TabsContent value="lessons" className="mt-5 space-y-3">
+            {(learning.data?.lessons ?? []).length === 0 && (memory.data?.lessons ?? []).length === 0 ? (
+              <p className="text-base text-muted-foreground">
+                Lessons appear after outcomes and verified fills.
+              </p>
             ) : (
               <>
                 {(learning.data?.lessons ?? []).map((l, i) => (
-                  <div key={`${l.at}-${i}`} className="text-xs text-muted-foreground">
+                  <div key={`${l.at}-${i}`} className="text-[15px] leading-relaxed text-muted-foreground">
                     <span className="text-accent-1">{l.outcome}</span> · {l.lesson}
                   </div>
                 ))}
                 {(memory.data?.lessons ?? []).map((l) => (
-                  <div key={l.thesisId} className="text-sm">
+                  <div key={l.thesisId} className="text-base">
                     {l.statement}{" "}
-                    <Badge variant="outline" className="ml-1 text-[10px]">
+                    <Badge variant="outline" className="ml-1 text-xs">
                       {l.status}
                     </Badge>
                   </div>
@@ -825,10 +787,52 @@ function PartnerInner() {
   );
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  driftPct: "SSI drift",
+  pulsedAt: "Last pulse",
+  liveCount: "Live sources",
+  terminalChange24hPct: "Terminal 24h",
+  tokenChange24hPct: "Token 24h",
+  alert: "Alert",
+};
+
+function humanField(field: string): string {
+  return FIELD_LABELS[field] ?? field.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+}
+
+function humanSource(source: string): string {
+  const map: Record<string, string> = {
+    valuechain: "ValueChain",
+    dexscreener: "DexScreener",
+    sodex: "SoDEX",
+    heirlock: "HEIRLOCK",
+  };
+  return map[source.toLowerCase()] ?? source;
+}
+
+function humanizeCopy(line: string): string {
+  return line
+    .replace(/\bpreflight APPROVE\b/gi, "policy clear")
+    .replace(/\bpreflight BLOCK\b/gi, "policy blocked")
+    .replace(/\bpreflight CAUTION\b/gi, "policy caution")
+    .replace(/\bcitations mostly LIVE\b/gi, "evidence live")
+    .replace(/\bLiving Loop\b/g, "Partner")
+    .replace(/\bWealthPolicy\b/g, "wealth policy")
+    .replace(/\b6\/6 citations LIVE\b/gi, "all sources live")
+    .replace(/\bcitations LIVE\b/gi, "sources live")
+    .replace(/\bnodes ·\b/gi, "links ·")
+    .replace(/\bedges ·\b/gi, "")
+    .replace(/\bUNAVAILABLE\b/g, "unavailable");
+}
+
 function formatChangedLine(line: string): string {
   const m = line.match(/^([^:]+):\s*(.+?)\s*→\s*(.+)$/);
-  if (!m) return line;
-  return `${m[1]}: ${formatPulseDelta(m[2])} → ${formatPulseDelta(m[3])}`;
+  if (!m) return humanizeCopy(line);
+  const from = formatPulseDelta(m[2]);
+  const to = formatPulseDelta(m[3]);
+  if (from === "—" && to === "—") return humanField(m[1]);
+  if (from === "—" || from === "null") return `${humanField(m[1])} now ${to}`;
+  return humanizeCopy(`${humanField(m[1])}: ${from} → ${to}`);
 }
 
 function groupByWeek(entries: TimelineEntry[]): Array<{ label: string; entries: TimelineEntry[] }> {
@@ -848,11 +852,11 @@ function groupByWeek(entries: TimelineEntry[]): Array<{ label: string; entries: 
 
 function DigestCard({ title, lines }: { title: string; lines: string[] }) {
   return (
-    <div className="rounded-md border border-border/40 bg-surface-0/40 px-3 py-2.5">
-      <div className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">{title}</div>
-      <ul className="mt-1.5 space-y-1">
+    <div className="rounded-xl border border-border/40 bg-surface-0/50 px-4 py-3.5">
+      <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{title}</div>
+      <ul className="mt-2.5 space-y-1.5">
         {lines.slice(0, 3).map((l) => (
-          <li key={l} className="text-xs leading-relaxed text-muted-foreground">
+          <li key={l} className="text-[15px] leading-relaxed text-foreground/85">
             {l}
           </li>
         ))}
@@ -879,9 +883,9 @@ function SideCard({
   const label =
     tone === "counsel" ? "text-emerald-300" : tone === "falsifier" ? "text-red-300" : "text-accent-1";
   return (
-    <div className={`rounded-md border ${border} bg-surface-0/50 p-3`}>
-      <div className={`font-mono text-[10px] uppercase tracking-wide ${label}`}>{title}</div>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
+    <div className={`rounded-xl border ${border} bg-surface-0/50 p-4`}>
+      <div className={`text-xs font-medium uppercase tracking-[0.14em] ${label}`}>{title}</div>
+      <p className="mt-2.5 text-[15px] leading-relaxed text-muted-foreground">{body}</p>
     </div>
   );
 }

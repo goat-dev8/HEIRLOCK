@@ -70,20 +70,20 @@ export async function computeLivingPortfolio(opts: {
 
   const risk =
     loop.preflight.verdict === "BLOCK"
-      ? "Risk UP: WealthPolicy preflight BLOCK — continuity gate closed."
+      ? "Risk elevated — on-chain policy blocked this window."
       : policy?.modeName && policy.modeName !== "Alive"
-        ? `Risk elevated: policy mode ${policy.modeName} — execution may be restricted.`
+        ? `Risk elevated — Continuity is in ${policy.modeName} mode.`
         : pulse?.answers.riskUp.length
           ? pulse.answers.riskUp[0]!
-          : "Risk stable — preflight APPROVE and citations mostly LIVE.";
+          : "Risk steady — policy clear and evidence live.";
 
   const confidence =
     pulse?.answers.strongerTheses.length
       ? `Confidence rising on ${pulse.answers.strongerTheses.length} thesis(es); avg open ${avgConf(open)}%.`
       : pulse?.answers.weakerTheses.length
-        ? `Confidence falling on ${pulse.answers.weakerTheses.length} thesis(es); review before Approve.`
+        ? `Confidence falling on ${pulse.answers.weakerTheses.length} thesis(es); review before you approve.`
         : open.length
-          ? `Open thesis confidence avg ${avgConf(open)}% — no pulse shift this cycle.`
+          ? `Open thesis confidence avg ${avgConf(open)}% — no shift this cycle.`
           : "No thesis confidence baseline yet.";
 
   const recentShifts = [

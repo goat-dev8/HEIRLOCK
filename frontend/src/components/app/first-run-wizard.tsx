@@ -64,13 +64,13 @@ export function FirstRunWizard() {
       {
         id: "siwe",
         title: "Sign in",
-        body: "SIWE creates a scoped session. No custody.",
+        body: "One message. Scoped session. No custody.",
         done: !!token,
       },
       {
         id: "sodex",
         title: "Verify SoDEX",
-        body: "Enable Trading on official SoDEX, then verify so HEIRLOCK stores your aid.",
+        body: "Enable trading on official SoDEX, then verify once here.",
         done: verified,
       },
     ],
@@ -79,7 +79,11 @@ export function FirstRunWizard() {
 
   useEffect(() => {
     if (dismissed) return;
-    if (isMarkedDone(address, network)) return;
+    if (!address) return;
+    if (isMarkedDone(address, network)) {
+      setOpen(false);
+      return;
+    }
     if (complete) {
       markDone(address, network);
       setOpen(false);
@@ -98,14 +102,17 @@ export function FirstRunWizard() {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) setDismissed(true);
+        if (!next) {
+          if (address) markDone(address, network);
+          setDismissed(true);
+        }
       }}
     >
       <DialogContent className="max-w-md border-border/60 bg-surface-0 sm:rounded-xl">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl">Get ready</DialogTitle>
-          <DialogDescription>
-            Three steps once per wallet. Then Home shows live evidence and the next action.
+          <DialogTitle className="font-display text-2xl">Get ready</DialogTitle>
+          <DialogDescription className="text-[15px] leading-relaxed">
+            Three steps once. Then Partner shows what changed while you were away.
           </DialogDescription>
         </DialogHeader>
 
@@ -113,20 +120,20 @@ export function FirstRunWizard() {
           {steps.map((step, i) => (
             <li
               key={step.id}
-              className="flex gap-3 rounded-lg border border-border/50 bg-surface-1/50 px-3 py-3"
+              className="flex gap-3 rounded-xl border border-border/50 bg-surface-1/50 px-3 py-3"
             >
               <div
                 className={
                   step.done
                     ? "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent-1/20 text-accent-1"
-                    : "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-border/60 text-[10px] text-muted-foreground"
+                    : "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-border/60 text-xs text-muted-foreground"
                 }
               >
                 {step.done ? <Check className="h-3 w-3" /> : i + 1}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-foreground">{step.title}</div>
-                <p className="mt-0.5 text-xs text-muted-foreground">{step.body}</p>
+                <div className="text-[15px] font-medium text-foreground">{step.title}</div>
+                <p className="mt-0.5 text-sm text-muted-foreground">{step.body}</p>
                 {!step.done && step.id === "connect" ? (
                   <div className="mt-2">
                     <ConnectButton />
@@ -172,6 +179,7 @@ export function FirstRunWizard() {
             variant="ghost"
             size="sm"
             onClick={() => {
+              markDone(address, network);
               setDismissed(true);
               setOpen(false);
             }}

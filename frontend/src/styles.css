@@ -89,7 +89,7 @@
   --secondary: oklch(0.245 0.014 260);
   --secondary-foreground: oklch(0.965 0.005 250);
   --muted: oklch(0.245 0.014 260);
-  --muted-foreground: oklch(0.65 0.02 260);
+  --muted-foreground: oklch(0.72 0.02 260);
   --accent: oklch(0.245 0.014 260);
   --accent-foreground: oklch(0.965 0.005 250);
   --accent-1: oklch(0.78 0.14 82);
@@ -127,22 +127,28 @@
     border-color: var(--color-border);
   }
 
+  html {
+    background-color: var(--color-background);
+    color-scheme: dark;
+    font-size: 16.5px;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.65;
     font-feature-settings: "cv11", "ss01", "ss03";
     -webkit-font-smoothing: antialiased;
-  }
-
-  html {
-    background-color: var(--color-background);
-    color-scheme: dark;
+    letter-spacing: -0.011em;
   }
 
   h1, h2, h3, h4, h5 {
     font-family: var(--font-display);
     font-feature-settings: "ss01", "ss02";
+    letter-spacing: -0.02em;
+    line-height: 1.15;
   }
 
   code, kbd, pre, .font-mono {
@@ -152,17 +158,17 @@
 
 @utility grid-bg {
   background-image:
-    linear-gradient(to right, oklch(1 0 0 / 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, oklch(1 0 0 / 0.04) 1px, transparent 1px);
-  background-size: 44px 44px;
+    linear-gradient(to right, oklch(1 0 0 / 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(1 0 0 / 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
   mask-image: radial-gradient(ellipse at center, black 30%, transparent 78%);
 }
 
 @utility hero-glow {
   background:
-    radial-gradient(60% 50% at 50% 0%, oklch(0.78 0.14 82 / 0.15), transparent 65%),
-    radial-gradient(45% 35% at 80% 30%, oklch(0.68 0.16 40 / 0.12), transparent 70%),
-    radial-gradient(45% 40% at 15% 60%, oklch(0.68 0.13 220 / 0.12), transparent 70%);
+    radial-gradient(60% 50% at 50% 0%, oklch(0.78 0.14 82 / 0.12), transparent 65%),
+    radial-gradient(45% 35% at 80% 30%, oklch(0.68 0.16 40 / 0.1), transparent 70%),
+    radial-gradient(45% 40% at 15% 60%, oklch(0.68 0.13 220 / 0.1), transparent 70%);
 }
 
 @utility hero-visual-mask {
@@ -180,7 +186,31 @@
   animation: heirlock-ticker 40s linear infinite;
 }
 
+@utility fade-rise {
+  animation: heirlock-fade-rise 0.55s ease-out both;
+}
+
 @keyframes heirlock-ticker {
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
+}
+
+@keyframes heirlock-fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heirlock-pulse-soft {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@utility thinking-dot {
+  animation: heirlock-pulse-soft 1.6s ease-in-out infinite;
 }

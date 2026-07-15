@@ -62,12 +62,12 @@ function ContinuityPage() {
   const loading = policy.isLoading;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Wealth continuity</div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Continuity</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Alive → Guardian → Heir modes on ValueChain. All state is on-chain.
+    <div className="mx-auto max-w-6xl space-y-8 pb-12">
+      <div className="fade-rise space-y-3">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Wealth continuity</p>
+        <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Continuity</h1>
+        <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
+          Alive → Guardian → Heir. Policy, action log, and heirship live on ValueChain — not in a database.
         </p>
       </div>
 
@@ -78,19 +78,12 @@ function ContinuityPage() {
           <>
             <Stat
               label="Mode"
-              value={
-                <span className="flex items-center gap-2">
-                  {MODE_NAMES[mode] ?? mode}
-                  <Badge variant="outline" className="font-mono text-[10px]">
-                    0{mode}
-                  </Badge>
-                </span>
-              }
-              hint="WealthPolicy.mode()"
+              value={MODE_NAMES[mode] ?? mode}
+              hint="On-chain Wealth Policy"
             />
-            <Stat label="Cap" value={usd(cap)} hint="maxNotionalUsd" />
-            <Stat label="ActionLog entries" value={Number(actionLen.data ?? 0)} hint="record()" />
-            <Stat label="Attestations" value={Number(attestCount.data ?? 0)} hint="AttestationRegistry.count()" />
+            <Stat label="Cap" value={usd(cap)} hint="Max notional per trade" />
+            <Stat label="Actions logged" value={Number(actionLen.data ?? 0)} hint="Immutable on ValueChain" />
+            <Stat label="Attestations" value={Number(attestCount.data ?? 0)} hint="Heirship proofs" />
           </>
         )}
       </div>
@@ -99,23 +92,20 @@ function ContinuityPage() {
         {MODE_NAMES.map((m, idx) => (
           <Panel key={m} tone={idx === mode ? "accent" : "default"} className="p-5">
             <div className="flex items-center justify-between">
-              <div className="font-display text-lg font-semibold tracking-tight">{m}</div>
-              <Badge variant="outline" className="font-mono text-[10px]">
-                Mode 0{idx}
-              </Badge>
+              <div className="font-display text-xl font-semibold tracking-tight">{m}</div>
+              {idx === mode ? (
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-accent-1/30 bg-accent-1/10 px-2.5 py-1 text-xs text-accent-1">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Current
+                </div>
+              ) : null}
             </div>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">
               {idx === 0
-                ? "Full skill surface. Execute under policy cap."
+                ? "You control the portfolio. Trade under the policy cap."
                 : idx === 1
-                  ? "Risk-off. Guardian may transition or freeze allocations."
-                  : "Heir has read + attested claim path. Legal execution off-chain."}
+                  ? "Risk-off. A guardian can freeze new trades and protect assets."
+                  : "Heirship path is ready. Legal transfer stays off-chain."}
             </p>
-            {idx === mode && (
-              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-accent-1/30 bg-accent-1/10 px-2.5 py-0.5 text-[11px] font-mono uppercase tracking-widest text-accent-1">
-                <ShieldCheck className="h-3 w-3" /> Active
-              </div>
-            )}
           </Panel>
         ))}
       </div>
@@ -123,7 +113,7 @@ function ContinuityPage() {
       <Panel>
         <PanelHeader
           title="Policy roles"
-          description="Ownership and controller from WealthPolicy on this network."
+          description="Who owns policy and who can change Continuity mode on this network."
           action={
             <a href={`${cfg.explorer}/address/${cfg.addresses.wealthPolicy}`} target="_blank" rel="noreferrer">
               <Button size="sm" variant="ghost">
@@ -134,7 +124,7 @@ function ContinuityPage() {
         />
         <div className="grid gap-4 p-5 md:grid-cols-2">
           <RoleRow label="Owner" value={owner} explorer={cfg.explorer} />
-          <RoleRow label="Controller (ModeController)" value={controller} explorer={cfg.explorer} />
+          <RoleRow label="Mode controller" value={controller} explorer={cfg.explorer} />
         </div>
       </Panel>
 
@@ -160,10 +150,9 @@ function ContinuityPage() {
           <TriangleAlert className="mt-0.5 h-5 w-5 text-warning" />
           <div className="text-sm">
             <div className="font-medium text-foreground">Mode transitions</div>
-            <div className="mt-1 text-muted-foreground">
-              <code className="font-mono">enterGuardian()</code> and <code className="font-mono">enterHeir()</code>
-              &nbsp;are called on ModeController by the addresses authorised in your WealthPolicy. Estate
-              transitions have real-world legal implications — HEIRLOCK does not provide legal advice.
+            <div className="mt-1 text-[15px] leading-relaxed text-muted-foreground">
+              Only authorised wallets can move Alive → Guardian → Heir on-chain. Estate transitions have
+              real-world legal implications — HEIRLOCK does not provide legal advice.
             </div>
             <div className="mt-3 flex flex-wrap gap-3">
               <GuardianEnterButton />
@@ -287,7 +276,7 @@ function EstateSandboxPanel() {
           }
         }}
       >
-        Estate sandbox (SANDBOX)
+        Estate practice
       </Button>
       {result ? (
         <div className="rounded-md border border-border/50 bg-surface-0/50 px-3 py-2 text-xs text-muted-foreground">
@@ -333,7 +322,7 @@ function GuardianEnterButton() {
           }
         }}
       >
-        Enter Guardian (on-chain)
+        Enter Guardian
       </Button>
       {result ? (
         <div className="rounded-md border border-border/50 bg-surface-0/50 px-3 py-2 text-xs">
@@ -380,7 +369,7 @@ function GuardianSimulateButton() {
           }
         }}
       >
-        Simulate Guardian (SANDBOX)
+        Practice Guardian (safe)
       </Button>
       {result ? (
         <div className="rounded-md border border-border/50 bg-surface-0/50 px-3 py-2 text-xs text-muted-foreground">
