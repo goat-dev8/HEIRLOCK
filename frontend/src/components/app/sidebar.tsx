@@ -3,20 +3,20 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/site/logo";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Home, Shield, Wallet, Menu, Scale } from "lucide-react";
+import { Shield, Wallet, Menu, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const PRIMARY_NAV = [
   {
     to: "/app/living" as const,
-    label: "Decide",
-    description: "Falsify · Debate · Choose",
+    label: "Partner",
+    description: "Pulse · Debate · Decide",
     icon: Scale,
   },
   {
     to: "/app/wealth" as const,
     label: "Wealth",
-    description: "Act under policy",
+    description: "Sign under policy",
     icon: Wallet,
   },
   {

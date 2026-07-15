@@ -18,6 +18,7 @@ import {
   computePortfolioDna,
   replayDecision,
 } from "../fo/partner-intel.js";
+import { runDailyPulse } from "../fo/pulse.js";
 import { listTrack } from "../fo/track.js";
 import { canForWallet } from "../skills/persist.js";
 import { readOnChainWealthPolicy } from "../valuechain/policy-read.js";
@@ -41,7 +42,7 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
       });
     }
 
-    const [loop, openTheses, whatChanged, dna, policy] = await Promise.all([
+    const [loop, , whatChanged, dna, policy] = await Promise.all([
       computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: undefined }),
       memory.listTheses(wallet, { limit: 20 }),
       memory.getWhatChanged(wallet),
@@ -49,44 +50,49 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
       readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
     ]);
 
-    const activeTheses = openTheses.filter((t) => t.status === "active" || t.status === "challenged");
-    const seenStmt = new Set<string>();
-    const uniqueTheses = activeTheses.filter((t) => {
+    const topDeltas = whatChanged.deltas.slice(0, 5);
+    const pulse = await runDailyPulse({ wallet, loop, policy });
+    const falsify = pulse.falsify.length
+      ? pulse.falsify
+      : (await computeFalsifyAlerts(wallet, loop, policy)).filter(
+          (f) => f.severity === "pressure" || f.severity === "broken",
+        );
+    const radar = pulse.radar.length ? pulse.radar : computeOpportunityRadar(loop, falsify, policy);
+
+    // Refresh theses after pulse mutations
+    const thesesAfter = await memory.listTheses(wallet, { limit: 20 });
+    const activeAfter = thesesAfter.filter((t) => t.status === "active" || t.status === "challenged");
+    const seen2 = new Set<string>();
+    const uniqueAfter = activeAfter.filter((t) => {
       const key = t.statement.trim().toLowerCase();
-      if (seenStmt.has(key)) return false;
-      seenStmt.add(key);
+      if (seen2.has(key)) return false;
+      seen2.add(key);
       return true;
     });
-    const topDeltas = whatChanged.deltas.slice(0, 5);
-    const falsify = await computeFalsifyAlerts(wallet, loop, policy);
-    const radar = computeOpportunityRadar(loop, falsify, policy);
-    const pressure = falsify.filter((f) => f.severity === "pressure" || f.severity === "broken");
-
-    const headline = pressure.length > 0
-      ? `${pressure.length} thesis under falsification pressure`
-      : loop.drift?.alert
-        ? loop.proposal.title
-        : topDeltas.length > 0
-          ? `${topDeltas.length} thing${topDeltas.length === 1 ? "" : "s"} changed since yesterday`
-          : String(loop.proposal.title);
 
     return {
       status: "LIVE",
-      product: "Falsifying Partner",
-      headline,
-      rationale: loop.proposal.rationale,
+      product: "Living Investment Partner",
+      headline: pulse.headline,
+      rationale: pulse.summary,
       proposal: loop.proposal,
       drift: loop.drift,
       preflight: loop.preflight,
       citations: loop.citations,
+      pulse: {
+        ranAt: pulse.ranAt,
+        summary: pulse.summary,
+        answers: pulse.answers,
+        mutations: pulse.mutations.slice(0, 12),
+      },
       dna: {
         archetype: dna.archetype,
         tagline: dna.tagline,
         stats: dna.stats,
       },
-      falsify: pressure.slice(0, 3),
+      falsify: falsify.slice(0, 3),
       radar: radar.slice(0, 3),
-      openTheses: uniqueTheses.map((t) => ({
+      openTheses: uniqueAfter.map((t) => ({
         id: t.id,
         statement: t.statement,
         status: t.status,
@@ -99,10 +105,10 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
         topDeltas,
       },
       choices: [
-        { id: "debate", label: "Debate", description: "Counsel vs Falsifier — memory-bound, cited" },
-        { id: "approve", label: "Approve", description: "Act on this under current WealthPolicy" },
-        { id: "challenge", label: "Challenge", description: "Ask the Partner to defend this with fresh evidence" },
-        { id: "wait", label: "Wait", description: "Log a decision to revisit later, take no action now" },
+        { id: "debate", label: "Debate", description: "Counsel → Falsifier → Moderator" },
+        { id: "approve", label: "Approve", description: "Act under WealthPolicy after debate" },
+        { id: "challenge", label: "Challenge", description: "Push back with fresh evidence" },
+        { id: "wait", label: "Wait", description: "Log and revisit later" },
       ],
       ts: new Date().toISOString(),
     };
@@ -379,7 +385,7 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
   });
 
   /**
-   * Memory-bound Adversarial Debate — Counsel vs Falsifier.
+   * Memory-bound Adversarial Debate — Counsel → Falsifier → Moderator.
    * Distinct from catalyst bull/bear: argues over THIS wallet's memory + Living Loop only.
    */
   app.post("/api/fo/partner/debate", { preHandler: requireWallet }, async (req, reply) => {
@@ -389,5 +395,18 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
     const loop = await computeLivingLoop(ctx, { foEnabled: true });
     const debate = await runMemoryDebate(ctx, wallet, loop);
     return debate;
+  });
+
+  /** Force a Living Partner pulse (re-score + self-criticism) without waiting for brief. */
+  app.post("/api/fo/partner/pulse", { preHandler: requireWallet }, async (req, reply) => {
+    const wallet = req.wallet!.address;
+    const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
+    if (!fo.ok) return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
+    const [loop, policy] = await Promise.all([
+      computeLivingLoop(ctx, { foEnabled: true }),
+      readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
+    ]);
+    const pulse = await runDailyPulse({ wallet, loop, policy, force: true });
+    return pulse;
   });
 }
