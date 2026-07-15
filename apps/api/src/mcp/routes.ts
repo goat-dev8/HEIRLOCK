@@ -9,6 +9,7 @@ import { buildEvidenceGraph } from "../fo/evidence-graph.js";
 import { evaluatePartnerApprovalGate } from "../fo/continuity-gate.js";
 import * as memory from "../fo/memory.js";
 import { canForWallet } from "../skills/persist.js";
+import { readOnChainWealthPolicy } from "../valuechain/policy-read.js";
 import { normalizeSsiSnapshot } from "../sodex/mark-to-market.js";
 import { evaluateSsiDrift } from "../ssi/drift.js";
 import { OPENAPI_TO_TOKEN, SSI_INDEX_TOKENS, SSI_SOURCE } from "../ssi/addresses.js";
@@ -145,18 +146,29 @@ async function invokeMcpTool(
     }
     case "partner_living_loop": {
       if (!wallet) throw new Error("wallet_required");
-      const fo = await canForWallet(wallet, "family_office", "read", "alive");
+      const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
       return computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: fo.reason });
     }
     case "partner_evidence_graph": {
       if (!wallet) throw new Error("wallet_required");
-      const fo = await canForWallet(wallet, "family_office", "read", "alive");
-      const living = await computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: fo.reason });
-      return buildEvidenceGraph(living);
+      const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
+      const [loop, policy] = await Promise.all([
+        computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: fo.reason }),
+        readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
+      ]);
+      return buildEvidenceGraph({ wallet, loop, policy });
     }
     case "policy_continuity_gate": {
       if (!wallet) throw new Error("wallet_required");
-      return evaluatePartnerApprovalGate(ctx, wallet);
+      const [loop, policy] = await Promise.all([
+        computeLivingLoop(ctx, { foEnabled: true }),
+        readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
+      ]);
+      return evaluatePartnerApprovalGate({
+        preflightVerdict: String(loop.preflight.verdict),
+        policy,
+        debateRan: false,
+      });
     }
     default:
       throw new Error(`handler_not_implemented:${name}`);
