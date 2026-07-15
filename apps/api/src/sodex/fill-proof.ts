@@ -7,6 +7,7 @@ import { prisma } from "../db.js";
 import { updateTrackOutcome } from "../fo/track.js";
 import { loadEnv } from "@heirlock/config";
 import { anchorConfirmedFill } from "../valuechain/action-log.js";
+import { applyFillToPartnerMemory } from "../fo/fill-learning.js";
 
 export type FillStatus =
   | "filled"
@@ -304,6 +305,12 @@ export async function applyFillEvidence(opts: {
       network: opts.environment === "testnet" ? "testnet" : "mainnet",
       signedOrderId: opts.signedOrderId,
       wallet: opts.wallet,
+      evidence,
+    }).catch(() => undefined);
+
+    await applyFillToPartnerMemory({
+      wallet: opts.wallet,
+      signedOrderId: opts.signedOrderId,
       evidence,
     }).catch(() => undefined);
   }

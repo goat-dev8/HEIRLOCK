@@ -104,6 +104,9 @@ export async function recordDecision(opts: {
   outcome?: DecisionOutcome;
   livingLoopHash?: string;
   citations?: EvidenceCitation[];
+  debateJson?: Prisma.InputJsonValue;
+  policyJson?: Prisma.InputJsonValue;
+  signedOrderId?: string;
 }): Promise<InvestmentDecision> {
   const userId = await resolveUserId(opts.wallet);
   if (opts.thesisId) {
@@ -120,6 +123,9 @@ export async function recordDecision(opts: {
       outcome: opts.outcome ?? "PENDING",
       livingLoopHash: opts.livingLoopHash,
       citationsJson: opts.citations ?? [],
+      debateJson: opts.debateJson,
+      policyJson: opts.policyJson,
+      signedOrderId: opts.signedOrderId,
     },
   });
 }
@@ -161,10 +167,63 @@ export async function updateDecisionOutcome(opts: {
 }): Promise<InvestmentDecision | null> {
   const existing = await getDecision(opts.wallet, opts.decisionId);
   if (!existing) return null;
-  return prisma.investmentDecision.update({
+  const updated = await prisma.investmentDecision.update({
     where: { id: opts.decisionId },
     data: { outcome: opts.outcome },
   });
+  if (opts.outcome !== "PENDING") {
+    try {
+      const { applyOutcomeLearning } = await import("./learning.js");
+      await applyOutcomeLearning({
+        wallet: opts.wallet,
+        decisionId: opts.decisionId,
+        outcome: opts.outcome,
+      });
+    } catch {
+      /* learning is best-effort */
+    }
+  }
+  return updated;
+}
+
+export type ThesisEvolutionPoint = {
+  at: string;
+  confidence: number;
+  reason: string;
+  delta: number;
+};
+
+/** Confidence history + birth metadata for a single thesis. */
+export async function getThesisEvolution(
+  wallet: string,
+  thesisId: string,
+): Promise<{
+  thesisId: string;
+  statement: string;
+  status: string;
+  birth: string;
+  confidence: number;
+  history: ThesisEvolutionPoint[];
+  lessons: string[];
+} | null> {
+  const thesis = await getThesis(wallet, thesisId);
+  if (!thesis) return null;
+  const env =
+    thesis.evidenceJson && typeof thesis.evidenceJson === "object" && !Array.isArray(thesis.evidenceJson)
+      ? (thesis.evidenceJson as {
+          confidenceHistory?: ThesisEvolutionPoint[];
+          lessonsLearned?: Array<{ lesson: string }>;
+        })
+      : {};
+  return {
+    thesisId: thesis.id,
+    statement: thesis.statement,
+    status: thesis.status,
+    birth: thesis.createdAt.toISOString(),
+    confidence: thesis.confidence,
+    history: env.confidenceHistory ?? [],
+    lessons: (env.lessonsLearned ?? []).map((l) => l.lesson),
+  };
 }
 
 /** Upsert today's (UTC) MarketSnapshot for a wallet — cheap append-only digest. */

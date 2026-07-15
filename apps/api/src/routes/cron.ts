@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../app.js";
 import { probeDatabase, prisma } from "../db.js";
 import { probeRedis } from "../redis.js";
+import { runBackgroundPartnerPulse } from "../fo/partner-background.js";
 
 /**
  * Scheduled job hooks for Render Cron / external schedulers.
@@ -81,5 +82,14 @@ export async function registerCronRoutes(app: FastifyInstance, ctx: AppContext) 
       upserts += 1;
     }
     return { ok: true, upserts };
+  });
+
+  app.post("/api/cron/partner-pulse", async (req, reply) => {
+    const body = (req.body ?? {}) as { force?: boolean; walletLimit?: number };
+    const result = await runBackgroundPartnerPulse(ctx, {
+      force: Boolean(body.force),
+      walletLimit: typeof body.walletLimit === "number" ? body.walletLimit : 50,
+    });
+    return { ok: true, ...result };
   });
 }

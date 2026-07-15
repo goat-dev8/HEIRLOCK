@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { z } from "zod";
 import { api } from "@/lib/api";
 import { useToken } from "@/lib/auth-store";
 import { RequireAuth } from "@/components/app/require-auth";
@@ -8,6 +9,8 @@ import { Panel, PanelHeader, Stat } from "@/components/app/panel";
 import { DataBadge } from "@/components/app/data-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAiDrawer } from "@/components/app/ai-drawer-context";
 import {
@@ -15,7 +18,6 @@ import {
   Brain,
   ChevronDown,
   Clock3,
-  History,
   RefreshCw,
   Scale,
   ShieldAlert,
@@ -25,7 +27,12 @@ import {
 import { toast } from "sonner";
 import { pctPoints, relTime, usd } from "@/lib/format";
 
+const learnSearchSchema = z.object({
+  learn: z.enum(["timeline", "theses", "changed", "lessons"]).catch("timeline"),
+});
+
 export const Route = createFileRoute("/app/living")({
+  validateSearch: (search) => learnSearchSchema.parse(search),
   head: () => ({
     meta: [{ title: "Partner — HEIRLOCK" }, { name: "robots", content: "noindex" }],
   }),
@@ -57,6 +64,21 @@ type PulseAnswers = {
   riskUp: string[];
   riskDown: string[];
 };
+type LivingPortfolio = {
+  status: string;
+  holdings: { environment: string; totalUsd: number | null; assetCount: number; note?: string };
+  narratives: { allocation: string; risk: string; confidence: string };
+  linkedTheses: Array<{ id: string; statement: string; confidence: number; status: string }>;
+  recentShifts: string[];
+};
+type ActionPlanStep = {
+  id: string;
+  phase: string;
+  title: string;
+  detail: string;
+  href?: string;
+  required: boolean;
+};
 type Brief = {
   status: string;
   product?: string;
@@ -75,6 +97,16 @@ type Brief = {
   dna?: { archetype: string; tagline: string; stats: { decisions: number; challengeRate: number; openTheses: number } };
   falsify?: Array<{ thesisId: string; statement: string; severity: string; reason: string; killConditions: string[] }>;
   radar?: Array<{ id: string; title: string; detail: string; urgency: string }>;
+  livingPortfolio?: LivingPortfolio;
+  evidenceGraph?: { summary: string; nodeCount: number; edgeCount: number };
+  policy?: { mode?: string; source?: string; maxNotionalUsd?: number | null };
+  continuityGate?: {
+    canApprove: boolean;
+    canExecute: boolean;
+    continuityMode: string;
+    blockReason: string | null;
+    nextStep: string;
+  };
   openTheses: Array<{ id: string; statement: string; status: string; confidence: number }>;
   whatChanged: { status: string; deltaCount: number; topDeltas: Array<{ field: string; from: unknown; to: unknown }> };
   ts: string;
@@ -93,6 +125,11 @@ type DebateResult = {
   falsifier: { content: string };
   moderator: { content: string };
   synthesis: { stance: string; confidence: number; summary: string };
+  actionPlan: {
+    primaryAction: string;
+    policyCapUsd: number | null;
+    steps: ActionPlanStep[];
+  };
   latencyMs: number;
 };
 
@@ -117,12 +154,37 @@ function LivingPage() {
 
 function PartnerInner() {
   const token = useToken();
+  const { learn } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const { openAi } = useAiDrawer();
   const qc = useQueryClient();
   const [whyOpen, setWhyOpen] = useState(false);
   const [debate, setDebate] = useState<DebateResult | null>(null);
+  const [lastDecisionId, setLastDecisionId] = useState<string | null>(null);
   const [replayId, setReplayId] = useState<string | null>(null);
   const [replayText, setReplayText] = useState<string | null>(null);
+
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+
+  const forcePulse = useMutation({
+    mutationFn: () =>
+      api("/api/fo/partner/pulse", { method: "POST", auth: true, timeoutMs: 120_000, body: {} }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["fo", "partner", "brief"] });
+      toast.success("Pulse complete — brief refreshed");
+    },
+    onError: (e) => toast.error((e as Error).message || "Pulse failed"),
+  });
+
+  const evidenceGraph = useQuery({
+    queryKey: ["fo", "partner", "evidence-graph", token],
+    queryFn: () =>
+      api<{ nodes: Array<{ id: string; kind: string; label: string; status?: string }>; summary: string }>(
+        "/api/fo/partner/evidence-graph",
+        { auth: true },
+      ),
+    enabled: !!token && evidenceOpen,
+  });
 
   const brief = useQuery({
     queryKey: ["fo", "partner", "brief", token],
@@ -138,12 +200,48 @@ function PartnerInner() {
     staleTime: 30_000,
   });
 
+  const memory = useQuery({
+    queryKey: ["fo", "partner", "memory", token],
+    queryFn: () =>
+      api<{
+        theses: Array<{
+          id: string;
+          statement: string;
+          status: string;
+          confidence: number;
+          invalidatedReason?: string | null;
+          updatedAt: string;
+        }>;
+        lessons: Array<{ thesisId: string; statement: string; status: string; resolvedAt: string }>;
+      }>("/api/fo/partner/memory", { auth: true }),
+    enabled: !!token,
+  });
+
+  const changed = useQuery({
+    queryKey: ["fo", "partner", "changed", token],
+    queryFn: () =>
+      api<{ status: string; deltas: Array<{ field: string; from: unknown; to: unknown }> }>(
+        "/api/fo/partner/changed",
+        { auth: true },
+      ),
+    enabled: !!token,
+  });
+
+  const learning = useQuery({
+    queryKey: ["fo", "partner", "learning", token],
+    queryFn: () =>
+      api<{ lessons: Array<{ lesson: string; at: string; outcome: string }> }>("/api/fo/partner/learning", {
+        auth: true,
+      }),
+    enabled: !!token,
+  });
+
   const decide = useMutation({
     mutationFn: (input: {
       actionType: "hold" | "ssi_allocate" | "sodex_trade" | "wait";
       userChoice: "approved" | "rejected" | "deferred";
     }) =>
-      api("/api/fo/partner/decision", {
+      api<{ decision: { id: string }; nextStep?: string }>("/api/fo/partner/decision", {
         method: "POST",
         auth: true,
         body: {
@@ -151,9 +249,12 @@ function PartnerInner() {
           userChoice: input.userChoice,
           proposal: brief.data?.proposal ?? {},
           citations: brief.data?.citations ?? [],
+          debate: debate ?? undefined,
+          policy: brief.data?.policy ?? undefined,
         },
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      setLastDecisionId(res.decision.id);
       qc.invalidateQueries({ queryKey: ["fo", "partner"] });
     },
     onError: (e) => toast.error((e as Error).message || "Could not record decision"),
@@ -210,27 +311,51 @@ function PartnerInner() {
   }
 
   const data = brief.data!;
-  const { proposal, drift, preflight, citations, pulse, dna, falsify, radar, openTheses } = data;
+  const { proposal, drift, preflight, citations, pulse, dna, falsify, radar, openTheses, livingPortfolio, evidenceGraph: graphMeta, policy, continuityGate } = data;
   const answers = pulse?.answers;
   const verdict = String(preflight.verdict ?? "CAUTION");
   const liveCount = citations.filter((c) => c.status === "LIVE").length;
   const primaryActionType = drift?.alert ? "ssi_allocate" : "hold";
   const debateStance = debate?.synthesis.stance;
-  const approveWarned = !debate || debateStance === "challenge" || debateStance === "wait";
+  const policyMode = policy?.mode ?? continuityGate?.continuityMode ?? "Unknown";
+  const policyLive = policy?.source === "valuechain";
+  const continuityBlocked = policyMode === "Guardian" || policyMode === "Heir";
+  const canApproveNow =
+    Boolean(debate) &&
+    verdict !== "BLOCK" &&
+    policyLive &&
+    !continuityBlocked &&
+    continuityGate?.canApprove !== false;
+  const blockReason = !debate
+    ? "Run Counsel → Falsifier → Moderator debate first."
+    : continuityBlocked
+      ? continuityGate?.blockReason
+      : verdict === "BLOCK"
+        ? "Preflight BLOCK"
+        : !policyLive
+          ? "On-chain WealthPolicy UNAVAILABLE"
+          : null;
 
   function approve() {
     if (!debate) {
       toast.error("Run Debate first — Counsel → Falsifier → Moderator");
       return;
     }
+    if (!canApproveNow) {
+      toast.error(blockReason ?? "Continuity or policy blocks approval");
+      return;
+    }
     if (debateStance === "challenge" || debateStance === "wait") {
       toast.message(`Moderator said ${debateStance.toUpperCase()} — recording Approve as your override`);
     }
-    decide.mutate({ actionType: primaryActionType, userChoice: "approved" });
-    if (drift?.alert && proposal.ssiAllocateUrl) {
-      window.open(proposal.ssiAllocateUrl, "_blank", "noreferrer");
-    }
-    toast.success("Approved — written to Living Memory");
+    decide.mutate(
+      { actionType: primaryActionType, userChoice: "approved" },
+      {
+        onSuccess: () => {
+          toast.success("Approved — go to Sign & verify on Wealth");
+        },
+      },
+    );
   }
 
   function challenge() {
@@ -262,10 +387,10 @@ function PartnerInner() {
           size="sm"
           variant="ghost"
           className="ml-auto"
-          onClick={() => brief.refetch()}
-          disabled={brief.isFetching}
+          onClick={() => forcePulse.mutate()}
+          disabled={forcePulse.isPending || brief.isFetching}
         >
-          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${brief.isFetching ? "animate-spin" : ""}`} />
+          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${forcePulse.isPending || brief.isFetching ? "animate-spin" : ""}`} />
           Pulse again
         </Button>
       </div>
@@ -357,6 +482,25 @@ function PartnerInner() {
         </Collapsible>
       </Panel>
 
+      {livingPortfolio ? (
+        <Panel className="p-5">
+          <PanelHeader title="Living portfolio" description="Why allocation, risk, and confidence changed" />
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <DigestCard title="Allocation" lines={[livingPortfolio.narratives.allocation]} />
+            <DigestCard title="Risk" lines={[livingPortfolio.narratives.risk]} />
+            <DigestCard title="Confidence" lines={[livingPortfolio.narratives.confidence]} />
+          </div>
+          {livingPortfolio.recentShifts.length > 0 ? (
+            <div className="mt-3">
+              <DigestCard title="Recent shifts" lines={livingPortfolio.recentShifts} />
+            </div>
+          ) : null}
+          <p className="mt-2 text-xs text-muted-foreground">
+            {livingPortfolio.holdings.note} · {livingPortfolio.holdings.assetCount} asset(s)
+          </p>
+        </Panel>
+      ) : null}
+
       {(falsify ?? []).length > 0 ? (
         <Panel className="border-amber-500/30 p-5">
           <PanelHeader title="Falsification pressure" description="Kill conditions vs live evidence" />
@@ -415,10 +559,71 @@ function PartnerInner() {
               </div>
               <p className="mt-1 text-sm">{debate.synthesis.summary}</p>
             </div>
+            {debate.actionPlan ? (
+              <div className="rounded-md border border-accent-1/25 bg-surface-0/40 p-3">
+                <div className="font-mono text-[10px] uppercase tracking-wide text-accent-1">
+                  Action plan · {debate.actionPlan.primaryAction.replace(/_/g, " ")}
+                </div>
+                <ol className="mt-2 space-y-2">
+                  {debate.actionPlan.steps.map((step) => (
+                    <li key={step.id} className="text-xs">
+                      <span className="font-mono uppercase text-muted-foreground">{step.phase}</span>
+                      <div className="text-sm font-medium">{step.title}</div>
+                      <p className="text-muted-foreground">{step.detail}</p>
+                      {step.href ? (
+                        step.href.startsWith("http") ? (
+                          <a href={step.href} target="_blank" rel="noreferrer" className="text-accent-1 hover:underline">
+                            Open
+                          </a>
+                        ) : (
+                          <Link to={step.href} className="text-accent-1 hover:underline">
+                            Go
+                          </Link>
+                        )
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
           </div>
         ) : (
           <p className="mt-3 text-xs text-muted-foreground">Required before Approve. The Partner will not let impulse replace evidence.</p>
         )}
+      </Panel>
+
+      {/* Policy + Continuity gate */}
+      <Panel className={`p-5 ${!canApproveNow ? "border-amber-500/30" : ""}`}>
+        <PanelHeader
+          title="Policy · Continuity"
+          description="On-chain WealthPolicy gates every approval"
+        />
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <span className="rounded-md border border-border/50 px-2 py-1 font-mono uppercase">
+            Preflight {verdict}
+          </span>
+          <span className="rounded-md border border-border/50 px-2 py-1 font-mono uppercase">
+            Mode {policyMode}
+          </span>
+          {policy?.maxNotionalUsd != null ? (
+            <span className="rounded-md border border-border/50 px-2 py-1 font-mono">
+              Cap ${policy.maxNotionalUsd}
+            </span>
+          ) : null}
+          <DataBadge status={policy?.source === "valuechain" ? "LIVE" : "UNAVAILABLE"} />
+        </div>
+        {blockReason && !canApproveNow ? (
+          <p className="mt-2 text-sm text-amber-200">{blockReason}</p>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Approve records intent only — Sign on Wealth executes under EIP-712.
+          </p>
+        )}
+        {!canApproveNow && continuityBlocked ? (
+          <Link to="/app/continuity" className="mt-2 inline-block text-xs text-accent-1 hover:underline">
+            Open Continuity →
+          </Link>
+        ) : null}
       </Panel>
 
       {/* 3 · Choose */}
@@ -426,7 +631,11 @@ function PartnerInner() {
         <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">3 · Choose</div>
         <p className="mt-1 text-sm text-muted-foreground">{proposal.title}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button onClick={approve} disabled={verdict === "BLOCK" || decide.isPending} variant={approveWarned ? "secondary" : "default"}>
+          <Button
+            onClick={approve}
+            disabled={!canApproveNow || decide.isPending}
+            variant={debateStance === "approve" ? "default" : "secondary"}
+          >
             Approve <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
           </Button>
           <Button variant="secondary" onClick={challenge} disabled={decide.isPending}>
@@ -438,71 +647,153 @@ function PartnerInner() {
             Wait
           </Button>
           <Link to="/app/wealth" search={{ tab: "trade" }} className="ml-auto">
-            <Button variant="ghost" size="sm">
+            <Button variant={lastDecisionId ? "default" : "ghost"} size="sm">
               4 · Sign & verify
             </Button>
           </Link>
         </div>
       </Panel>
 
-      {openTheses.length > 0 ? (
-        <Panel className="p-5">
-          <PanelHeader title="Hypothesis engine" description="Confidence evolves with each pulse" />
-          <div className="mt-3 space-y-2">
-            {openTheses.slice(0, 5).map((t) => (
-              <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/40 px-3 py-2">
-                <div>
-                  <div className="text-sm">{t.statement}</div>
-                  <div className="font-mono text-[10px] uppercase text-muted-foreground">{t.status}</div>
-                </div>
-                <span className="font-mono text-sm">{t.confidence}%</span>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      ) : null}
-
-      {/* 5 · Learn */}
+      {/* Evidence graph */}
       <Panel className="p-5">
-        <PanelHeader
-          title="5 · Learn"
-          description="Replay past choices against today's evidence"
-          action={
-            <Link to="/app/memory">
-              <Button size="sm" variant="ghost">
-                <History className="mr-1.5 h-3.5 w-3.5" />
-                Memory
-              </Button>
-            </Link>
-          }
-        />
-        {(timeline.data?.entries ?? []).length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">No decisions yet — Choose above to start Living Memory.</p>
-        ) : (
-          <div className="divide-y divide-border/40">
-            {(timeline.data?.entries ?? []).slice(0, 6).map((e) => (
-              <div key={`${e.type}-${e.id}`} className="flex flex-wrap items-start justify-between gap-3 py-3">
-                <div>
-                  <div className="font-mono text-[10px] uppercase text-muted-foreground">
-                    {e.type} · {relTime(e.at)}
-                  </div>
-                  <div className="text-sm">{e.title}</div>
-                  {replayId === e.id && replayText ? <p className="mt-1 text-xs text-accent-1">{replayText}</p> : null}
-                </div>
-                <div className="flex items-center gap-2">
-                  {e.type === "decision" ? (
-                    <Button size="sm" variant="ghost" disabled={runReplay.isPending} onClick={() => runReplay.mutate(e.id)}>
-                      Replay
-                    </Button>
-                  ) : null}
-                  <span className="rounded-md border border-border/50 px-2 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
-                    {e.outcome ?? "PENDING"}
+        <Collapsible open={evidenceOpen} onOpenChange={setEvidenceOpen}>
+          <CollapsibleTrigger asChild>
+            <button type="button" className="flex w-full items-center justify-between text-left">
+              <PanelHeader
+                title="Evidence graph"
+                description={graphMeta?.summary ?? "Link proposal → citations → memory → policy"}
+              />
+              <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${evidenceOpen ? "rotate-180" : ""}`} />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-3">
+            {evidenceGraph.isLoading ? (
+              <Skeleton className="h-24 rounded-md" />
+            ) : evidenceGraph.data ? (
+              <div className="flex flex-wrap gap-2">
+                {evidenceGraph.data.nodes.slice(0, 12).map((n) => (
+                  <span
+                    key={n.id}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border/50 px-2 py-1 font-mono text-[10px] uppercase"
+                  >
+                    {n.kind}
+                    <span className="normal-case text-muted-foreground">{n.label.slice(0, 40)}</span>
+                    {n.status ? <DataBadge status={n.status === "LIVE" ? "LIVE" : "UNAVAILABLE"} /> : null}
                   </span>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            ) : (
+              <p className="text-xs text-muted-foreground">Open to load provenance graph.</p>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+      </Panel>
+
+
+      {/* 5 · Learn — Memory lives here */}
+      <Panel className="p-5">
+        <PanelHeader title="5 · Learn" description="Investment Memory — timeline, theses, lessons" />
+        <Tabs
+          value={learn}
+          onValueChange={(v) =>
+            navigate({ search: { learn: v as "timeline" | "theses" | "changed" | "lessons" } })
+          }
+          className="mt-3"
+        >
+          <TabsList>
+            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+            <TabsTrigger value="theses">Theses</TabsTrigger>
+            <TabsTrigger value="changed">What changed</TabsTrigger>
+            <TabsTrigger value="lessons">Lessons</TabsTrigger>
+          </TabsList>
+          <TabsContent value="timeline" className="mt-3">
+            {(timeline.data?.entries ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">No decisions yet — Choose above.</p>
+            ) : (
+              <div className="divide-y divide-border/40">
+                {(timeline.data?.entries ?? []).slice(0, 8).map((e) => (
+                  <div key={`${e.type}-${e.id}`} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                    <div>
+                      <div className="font-mono text-[10px] uppercase text-muted-foreground">
+                        {e.type} · {relTime(e.at)}
+                      </div>
+                      <div className="text-sm">{e.title}</div>
+                      {replayId === e.id && replayText ? (
+                        <p className="mt-1 text-xs text-accent-1">{replayText}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {e.type === "decision" ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={runReplay.isPending}
+                          onClick={() => runReplay.mutate(e.id)}
+                        >
+                          Replay
+                        </Button>
+                      ) : null}
+                      <Badge variant="outline" className="font-mono text-[10px]">
+                        {e.outcome ?? "PENDING"}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+          <TabsContent value="theses" className="mt-3 space-y-2">
+            {(memory.data?.theses ?? [])
+              .filter((t) => t.status === "active" || t.status === "challenged")
+              .map((t) => (
+                <div
+                  key={t.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/40 px-3 py-2"
+                >
+                  <div>
+                    <div className="text-sm">{t.statement}</div>
+                    <div className="font-mono text-[10px] uppercase text-muted-foreground">{t.status}</div>
+                  </div>
+                  <span className="font-mono text-sm">{t.confidence}%</span>
+                </div>
+              ))}
+          </TabsContent>
+          <TabsContent value="changed" className="mt-3">
+            {changed.data?.status === "NO_BASELINE" ? (
+              <p className="text-sm text-muted-foreground">Baseline building — check back tomorrow.</p>
+            ) : (
+              <div className="space-y-2">
+                {(changed.data?.deltas ?? []).slice(0, 8).map((d) => (
+                  <div key={d.field} className="text-xs text-muted-foreground">
+                    <span className="font-mono">{d.field}</span>: {String(d.from ?? "—")} → {String(d.to ?? "—")}
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+          <TabsContent value="lessons" className="mt-3 space-y-2">
+            {(learning.data?.lessons ?? []).length === 0 &&
+            (memory.data?.lessons ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">Lessons appear after outcomes and fill verification.</p>
+            ) : (
+              <>
+                {(learning.data?.lessons ?? []).map((l, i) => (
+                  <div key={`${l.at}-${i}`} className="text-xs text-muted-foreground">
+                    <span className="text-accent-1">{l.outcome}</span> · {l.lesson}
+                  </div>
+                ))}
+                {(memory.data?.lessons ?? []).map((l) => (
+                  <div key={l.thesisId} className="text-sm">
+                    {l.statement}{" "}
+                    <Badge variant="outline" className="ml-1 text-[10px]">
+                      {l.status}
+                    </Badge>
+                  </div>
+                ))}
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
       </Panel>
     </div>
   );

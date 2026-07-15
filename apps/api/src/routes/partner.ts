@@ -20,6 +20,12 @@ import {
 } from "../fo/partner-intel.js";
 import { runDailyPulse } from "../fo/pulse.js";
 import { listTrack } from "../fo/track.js";
+import { buildEvidenceGraph } from "../fo/evidence-graph.js";
+import { computeLivingPortfolio } from "../fo/living-portfolio.js";
+import { listRecentLessons } from "../fo/learning.js";
+import { evaluatePartnerApprovalGate } from "../fo/continuity-gate.js";
+import { linkDecisionToOrder } from "../fo/fill-learning.js";
+import { buildCitationContentHash } from "../valuechain/attestation.js";
 import { canForWallet } from "../skills/persist.js";
 import { readOnChainWealthPolicy } from "../valuechain/policy-read.js";
 import { prisma } from "../db.js";
@@ -52,6 +58,14 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
 
     const topDeltas = whatChanged.deltas.slice(0, 5);
     const pulse = await runDailyPulse({ wallet, loop, policy });
+    const livingPortfolio = await computeLivingPortfolio({
+      ctx,
+      wallet,
+      loop,
+      pulse,
+      policy,
+    });
+    const evidenceGraph = await buildEvidenceGraph({ wallet, loop, policy });
     const falsify = pulse.falsify.length
       ? pulse.falsify
       : (await computeFalsifyAlerts(wallet, loop, policy)).filter(
@@ -70,6 +84,12 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
       return true;
     });
 
+    const continuityGate = evaluatePartnerApprovalGate({
+      preflightVerdict: String(loop.preflight.verdict),
+      policy,
+      debateRan: false,
+    });
+
     return {
       status: "LIVE",
       product: "Living Investment Partner",
@@ -78,6 +98,15 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
       proposal: loop.proposal,
       drift: loop.drift,
       preflight: loop.preflight,
+      policy: policy
+        ? {
+            mode: policy.modeName,
+            source: policy.source,
+            maxNotionalUsd: policy.maxNotionalUsd,
+            address: policy.address,
+          }
+        : null,
+      continuityGate,
       citations: loop.citations,
       pulse: {
         ranAt: pulse.ranAt,
@@ -92,6 +121,12 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
       },
       falsify: falsify.slice(0, 3),
       radar: radar.slice(0, 3),
+      livingPortfolio,
+      evidenceGraph: {
+        summary: evidenceGraph.summary,
+        nodeCount: evidenceGraph.nodes.length,
+        edgeCount: evidenceGraph.edges.length,
+      },
       openTheses: uniqueAfter.map((t) => ({
         id: t.id,
         statement: t.statement,
@@ -241,17 +276,59 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
         citations: z
           .array(z.object({ source: z.string(), endpoint: z.string(), at: z.string(), status: z.string() }))
           .optional(),
+        debate: z.record(z.string(), z.unknown()).optional(),
+        policy: z.record(z.string(), z.unknown()).optional(),
       })
       .safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: body.error.flatten() });
 
+    const policyOnChain = await readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null);
+    const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
+    const loop = await computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: fo.ok ? undefined : fo.reason });
+
+    if (body.data.userChoice === "approved") {
+      const debatePayload = body.data.debate as { synthesis?: { stance?: string } } | undefined;
+      const gate = evaluatePartnerApprovalGate({
+        preflightVerdict: String(loop.preflight.verdict),
+        policy: policyOnChain,
+        debateRan: Boolean(body.data.debate),
+        moderatorStance: debatePayload?.synthesis?.stance as "approve" | "challenge" | "wait" | undefined,
+        userChoice: "approved",
+      });
+      if (!gate.canApprove) {
+        return reply.code(403).send({
+          error: "approval_blocked",
+          reason: gate.blockReason,
+          continuityGate: gate,
+        });
+      }
+    }
+
+    const livingLoopHash =
+      body.data.livingLoopHash ??
+      buildCitationContentHash({
+        wallet,
+        citations: body.data.citations ?? loop.citations,
+        proposalAction: String((body.data.proposal as Record<string, unknown>).action ?? ""),
+      });
+
     try {
       const decision = await memory.recordDecision({
         wallet,
-        ...body.data,
+        thesisId: body.data.thesisId,
+        actionType: body.data.actionType,
         proposal: body.data.proposal as Prisma.InputJsonValue,
+        userChoice: body.data.userChoice,
+        livingLoopHash,
+        citations: body.data.citations,
+        debateJson: body.data.debate as Prisma.InputJsonValue | undefined,
+        policyJson: (body.data.policy ?? {
+          mode: policyOnChain?.modeName,
+          source: policyOnChain?.source,
+          maxNotionalUsd: policyOnChain?.maxNotionalUsd,
+        }) as Prisma.InputJsonValue,
       });
-      return { status: "LIVE", decision };
+      return { status: "LIVE", decision, nextStep: body.data.userChoice === "approved" ? "sign" : "learn" };
     } catch (err) {
       if (err instanceof Error && err.message === "thesis_not_found") {
         return reply.code(404).send({ error: "thesis_not_found" });
@@ -274,7 +351,101 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
       outcome: body.data.outcome,
     });
     if (!updated) return reply.code(404).send({ error: "decision_not_found" });
-    return { status: "LIVE", decision: updated };
+    const learning = await listRecentLessons(wallet, 3);
+    return { status: "LIVE", decision: updated, learning };
+  });
+
+  /** Link an approved decision to a signed SoDEX order before relay. */
+  app.post("/api/fo/partner/decision/:id/link-order", { preHandler: requireWallet }, async (req, reply) => {
+    const wallet = req.wallet!.address;
+    const params = z.object({ id: z.string().min(1) }).safeParse(req.params);
+    const body = z.object({ signedOrderId: z.string().min(1) }).safeParse(req.body);
+    if (!params.success || !body.success) {
+      return reply.code(400).send({ error: "invalid_request" });
+    }
+    const ok = await linkDecisionToOrder({
+      wallet,
+      decisionId: params.data.id,
+      signedOrderId: body.data.signedOrderId,
+    });
+    if (!ok) return reply.code(404).send({ error: "decision_not_found" });
+    return { status: "LIVE", linked: true };
+  });
+
+  /** Continuity + policy gate for Partner Approve (client can pre-check). */
+  app.get("/api/fo/partner/gate", { preHandler: requireWallet }, async (req) => {
+    const wallet = req.wallet!.address;
+    const query = z
+      .object({ debateRan: z.enum(["true", "false"]).optional(), stance: z.string().optional() })
+      .safeParse(req.query ?? {});
+    const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
+    const [loop, policy] = await Promise.all([
+      computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: fo.ok ? undefined : fo.reason }),
+      readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
+    ]);
+    const gate = evaluatePartnerApprovalGate({
+      preflightVerdict: String(loop.preflight.verdict),
+      policy,
+      debateRan: query.success && query.data.debateRan === "true",
+      moderatorStance: query.success ? (query.data.stance as "approve" | "challenge" | "wait" | undefined) : undefined,
+    });
+    return { status: "LIVE", gate, policy: policy ? { mode: policy.modeName, source: policy.source } : null };
+  });
+
+  /** Thesis evolution — birth, confidence history, lessons. */
+  app.get("/api/fo/partner/thesis/:id/evolution", { preHandler: requireWallet }, async (req, reply) => {
+    const wallet = req.wallet!.address;
+    const params = z.object({ id: z.string().min(1) }).safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "invalid_id" });
+    const evolution = await memory.getThesisEvolution(wallet, params.data.id);
+    if (!evolution) return reply.code(404).send({ error: "thesis_not_found" });
+    return { status: "LIVE", evolution };
+  });
+
+  /** Learning engine — recent lessons from outcomes + pulse. */
+  app.get("/api/fo/partner/learning", { preHandler: requireWallet }, async (req) => {
+    const wallet = req.wallet!.address;
+    const lessons = await listRecentLessons(wallet, 15);
+    return { status: "LIVE", lessons };
+  });
+
+  /** Evidence graph — full node/edge provenance for live proposal. */
+  app.get("/api/fo/partner/evidence-graph", { preHandler: requireWallet }, async (req, reply) => {
+    const wallet = req.wallet!.address;
+    const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
+    if (!fo.ok) return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
+    const query = z.object({ decisionId: z.string().optional() }).safeParse(req.query ?? {});
+    const [loop, policy] = await Promise.all([
+      computeLivingLoop(ctx, { foEnabled: true }),
+      readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
+    ]);
+    const graph = await buildEvidenceGraph({
+      wallet,
+      loop,
+      policy,
+      focusDecisionId: query.success ? query.data.decisionId : undefined,
+    });
+    return graph;
+  });
+
+  /** Living Portfolio — holdings + why allocation/risk/confidence changed. */
+  app.get("/api/fo/partner/portfolio", { preHandler: requireWallet }, async (req, reply) => {
+    const wallet = req.wallet!.address;
+    const fo = await canForWallet(ctx.skills.registry, wallet, "family_office", "read", "alive");
+    if (!fo.ok) return reply.code(403).send({ error: "Family Office Skill disabled", reason: fo.reason });
+    const [loop, policy] = await Promise.all([
+      computeLivingLoop(ctx, { foEnabled: true }),
+      readOnChainWealthPolicy(ctx.env, "testnet").catch(() => null),
+    ]);
+    const pulse = await runDailyPulse({ wallet, loop, policy });
+    const livingPortfolio = await computeLivingPortfolio({
+      ctx,
+      wallet,
+      loop,
+      pulse,
+      policy,
+    });
+    return { status: "LIVE", portfolio: livingPortfolio };
   });
 
   /** Why Engine — expand a decision or the live proposal into cited evidence. */
@@ -313,7 +484,9 @@ export async function registerPartnerRoutes(app: FastifyInstance, ctx: AppContex
             }
           : null,
         citations: decision.citationsJson ?? [],
-        policy,
+        debate: decision.debateJson ?? null,
+        fillProof: decision.fillProofJson ?? null,
+        policy: decision.policyJson ?? policy,
         recordedAt: decision.createdAt,
       };
     }

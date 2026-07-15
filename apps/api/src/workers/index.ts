@@ -1,9 +1,11 @@
 import type { Env } from "@heirlock/config";
 import type { AIProviderManager } from "@heirlock/ai-provider";
 import type { SoSoValueClient } from "../soso/client.js";
+import type { AppContext } from "../app.js";
 import { prisma } from "../db.js";
 import { probeRedis } from "../redis.js";
 import { probeDatabase } from "../db.js";
+import { runBackgroundPartnerPulse } from "../fo/partner-background.js";
 
 export type WorkerHandles = {
   stop: () => void;
@@ -17,6 +19,7 @@ export function startWorkers(input: {
   env: Env;
   ai: AIProviderManager;
   soso: SoSoValueClient;
+  ctx?: AppContext;
   log?: (msg: string, extra?: unknown) => void;
 }): WorkerHandles {
   const log = input.log ?? ((msg, extra) => console.log(`[worker] ${msg}`, extra ?? ""));
@@ -108,6 +111,25 @@ export function startWorkers(input: {
       }
     }, 120_000),
   );
+
+  // Partner background pulse every 15 minutes (throttled per-thesis inside runDailyPulse)
+  if (input.ctx) {
+    const ctx = input.ctx;
+    timers.push(
+      setInterval(async () => {
+        try {
+          const result = await runBackgroundPartnerPulse(ctx);
+          log("partner_background_pulse_ok", {
+            pulsed: result.pulsed,
+            skipped: result.skipped,
+            errors: result.errors.length,
+          });
+        } catch (err) {
+          log("partner_background_pulse_fail", err instanceof Error ? err.message : err);
+        }
+      }, 15 * 60_000),
+    );
+  }
 
   return {
     stop() {

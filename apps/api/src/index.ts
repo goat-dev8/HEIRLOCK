@@ -15,6 +15,7 @@ async function main() {
     env,
     ai: app.ctx.ai,
     soso: app.ctx.soso,
+    ctx: app.ctx,
     log: (msg, extra) => app.log.info({ extra }, msg),
   });
 

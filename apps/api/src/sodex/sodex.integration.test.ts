@@ -49,7 +49,6 @@ test("prepareSpotBatchOrder blocks mainnet over cap", async () => {
   });
   assert.equal(r.ok, false);
 });
-});
 
 test("SoDEX WS connects and receives on testnet", async () => {
   const env = loadEnv();

@@ -81,7 +81,7 @@ function asEnvelope(raw: unknown): EvidenceEnvelope {
   return raw as EvidenceEnvelope;
 }
 
-function scoreDelta(severity: FalsifyAlert["severity"], driftAlert: boolean, preflight: string): number {
+export function scoreDelta(severity: FalsifyAlert["severity"], driftAlert: boolean, preflight: string): number {
   if (severity === "broken" || preflight === "BLOCK") return -25;
   if (severity === "pressure") return -12;
   if (driftAlert) return -8;
@@ -110,8 +110,12 @@ export async function runDailyPulse(opts: {
   const rising: ThesisEvolution[] = [];
 
   const alertByThesis = new Map(falsify.map((f) => [f.thesisId, f]));
+  const seenStatements = new Set<string>();
 
   for (const t of open) {
+    const stmtKey = t.statement.trim().toLowerCase();
+    if (seenStatements.has(stmtKey)) continue;
+    seenStatements.add(stmtKey);
     const alert = alertByThesis.get(t.id);
     const severity = alert?.severity ?? "watch";
     const delta = scoreDelta(severity, Boolean(loop.drift?.alert), String(loop.preflight.verdict));

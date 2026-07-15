@@ -18,6 +18,21 @@ export type DebateSide = {
   latencyMs?: number;
 };
 
+export type ActionPlanStep = {
+  id: string;
+  phase: "understand" | "evidence" | "policy" | "action" | "verify" | "learn";
+  title: string;
+  detail: string;
+  href?: string;
+  required: boolean;
+};
+
+export type ActionPlan = {
+  primaryAction: "ssi_allocate" | "sodex_trade" | "hold" | "wait";
+  policyCapUsd: number | null;
+  steps: ActionPlanStep[];
+};
+
 export type DebateResult = {
   status: "LIVE" | "DEGRADED";
   proposalTitle: string;
@@ -29,10 +44,106 @@ export type DebateResult = {
     confidence: number;
     summary: string;
   };
+  actionPlan: ActionPlan;
   citations: LivingLoopResult["citations"];
   memoryUsed: { openTheses: number; recentDecisions: number };
   latencyMs: number;
 };
+
+/** Deterministic post-debate plan: Understand → Evidence → Policy → Action → Verify → Learn */
+export function buildActionPlan(
+  loop: LivingLoopResult,
+  synthesis: DebateResult["synthesis"],
+  env: { ssiAppUrl?: string; maxNotionalUsd?: number },
+): ActionPlan {
+  const liveCount = loop.citations.filter((c) => c.status === "LIVE").length;
+  const total = loop.citations.length;
+  const drift = Boolean(loop.drift?.alert);
+  const blocked = loop.preflight.verdict === "BLOCK";
+
+  let primaryAction: ActionPlan["primaryAction"] = "hold";
+  if (synthesis.stance === "wait" || blocked) {
+    primaryAction = "wait";
+  } else if (drift && synthesis.stance === "approve") {
+    primaryAction = "ssi_allocate";
+  } else if (synthesis.stance === "approve" && !drift) {
+    primaryAction = "hold";
+  } else if (synthesis.stance === "challenge") {
+    primaryAction = "wait";
+  }
+
+  const ssiUrl =
+    typeof loop.proposal.ssiAllocateUrl === "string"
+      ? loop.proposal.ssiAllocateUrl
+      : env.ssiAppUrl;
+
+  const steps: ActionPlanStep[] = [
+    {
+      id: "understand",
+      phase: "understand",
+      title: "Understand the proposal",
+      detail: String(loop.proposal.title ?? "Review Living Loop headline"),
+      required: true,
+    },
+    {
+      id: "evidence",
+      phase: "evidence",
+      title: "Verify evidence",
+      detail: `${liveCount}/${total} citations LIVE — expand Proof before acting.`,
+      required: liveCount < total,
+    },
+    {
+      id: "policy",
+      phase: "policy",
+      title: "Policy gate",
+      detail: blocked
+        ? "Preflight BLOCK — do not Approve until continuity allows."
+        : `Preflight ${loop.preflight.verdict} · cap $${env.maxNotionalUsd ?? "?"}`,
+      required: blocked,
+    },
+    {
+      id: "action",
+      phase: "action",
+      title:
+        primaryAction === "ssi_allocate"
+          ? "SSI allocate (official app)"
+          : primaryAction === "wait"
+            ? "Wait — log deferral"
+            : "Hold — confirm exposure",
+      detail:
+        primaryAction === "ssi_allocate"
+          ? "Use official SSI app — HEIRLOCK does not mint on your behalf."
+          : String(loop.proposal.rationale ?? synthesis.summary),
+      href:
+        primaryAction === "ssi_allocate" && ssiUrl
+          ? ssiUrl
+          : undefined,
+      required: synthesis.stance === "approve",
+    },
+    {
+      id: "verify",
+      phase: "verify",
+      title: "Sign & verify fill",
+      detail: "EIP-712 relay → trades + balance delta proof on Wealth.",
+      href: "/app/wealth",
+      required: false,
+    },
+    {
+      id: "learn",
+      phase: "learn",
+      title: "Learn from outcome",
+      detail: "Replay decision later; pulse will self-criticize if today would differ.",
+      href: "/app/living",
+      required: false,
+    },
+  ];
+
+  return {
+    primaryAction,
+    policyCapUsd: env.maxNotionalUsd ?? null,
+    steps,
+  };
+}
 
 function stripJsonish(s: string): string {
   return s.replace(/```[\s\S]*?```/g, "").trim();
@@ -195,6 +306,12 @@ Issue the final recommendation.`;
     synthesis.summary = "Moderator overridden: WealthPolicy preflight BLOCK — wait.";
   }
 
+  const maxNotional = Math.min(ctx.env.TRADING_MAX_NOTIONAL_USD, ctx.env.MAINNET_TEST_MAX_NOTIONAL_USD);
+  const actionPlan = buildActionPlan(loop, synthesis, {
+    ssiAppUrl: ctx.env.SSI_APP_URL,
+    maxNotionalUsd: maxNotional,
+  });
+
   const degraded =
     counsel.content.startsWith("UNAVAILABLE") ||
     falsifier.content.startsWith("UNAVAILABLE") ||
@@ -231,6 +348,7 @@ Issue the final recommendation.`;
     falsifier,
     moderator,
     synthesis,
+    actionPlan,
     citations: loop.citations,
     memoryUsed: { openTheses: open.length, recentDecisions: decisions.length },
     latencyMs: Date.now() - started,
