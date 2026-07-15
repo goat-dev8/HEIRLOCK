@@ -60,6 +60,12 @@ API health local: `ok` (DB + Redis). Occasional `EADDRINUSE` from watch restarts
 - [x] Polish UX to premium financial-product bar
 - [x] Local browser QA with connected wallet
 - [x] `PROJECT_MEMORY.md` updated
-- [x] Push via `scripts/push-github-safe.mjs` + `.env` `GITHUB_TOKEN`
-- [ ] Deploy Vercel + Render
-- [ ] Production smoke after deploy
+- [x] Push via `scripts/push-github-safe.mjs` + `.env` `GITHUB_TOKEN` (`b873040`)
+- [x] Deploy Vercel (READY) + Render (`dep-d9be3d9oagis73bh4tbg`)
+- [x] Production smoke: API `/api/health` ok · web `/app/living` 200
+
+## Production URLs
+
+- Web: https://getheirlock.vercel.app  
+- API: https://heirlock-api.onrender.com  
+- Latest Vercel deployment: https://heirlock-pfte8zc0g-goats-projects-3f023cc9.vercel.app
