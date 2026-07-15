@@ -34,13 +34,13 @@ function SkillsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Platform</div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Skills</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Install Skills → Build Your Financial OS. Family Office is the flagship Skill; toggle others
-          to reshape the Living Loop tool registry.
+    <div className="mx-auto max-w-5xl space-y-8 pb-12">
+      <div className="fade-rise space-y-3">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Financial OS</p>
+        <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Skills</h1>
+        <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
+          Install permissioned capabilities — Research, SSI, Execution, Memory — and compose your
+          Partner on the SoSoValue stack. Family Office orchestrates; every Skill exposes real tools.
         </p>
       </div>
 

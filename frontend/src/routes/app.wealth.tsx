@@ -30,7 +30,8 @@ function WealthPage() {
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Execution</p>
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Wealth</h1>
         <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
-          Review holdings, then sign under policy. Your wallet executes — HEIRLOCK verifies the fill.
+          Holdings from SoDEX and SSI, trades under policy cap, fill proof on ValueChain. You sign —
+          HEIRLOCK remembers and learns.
         </p>
         {decisionId ? (
           <p className="text-[15px] text-accent-1">

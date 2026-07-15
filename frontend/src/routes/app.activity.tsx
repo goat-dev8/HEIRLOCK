@@ -13,11 +13,14 @@ export const Route = createFileRoute("/app/activity")({
 
 function ActivityPage() {
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Platform</div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">Activity</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Skill events and signed order outcomes.</p>
+    <div className="mx-auto max-w-4xl space-y-8 pb-12">
+      <div className="fade-rise space-y-3">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Audit trail</p>
+        <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Activity</h1>
+        <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
+          Skill events, signed orders, and execution outcomes — the operational log of your Financial OS
+          on ValueChain.
+        </p>
       </div>
       <RequireAuth>
         <Timeline />

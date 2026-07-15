@@ -3,17 +3,23 @@ export type WealthMode = "alive" | "guardian" | "heir";
 export type SkillId =
   | "family_office"
   | "research"
+  | "macro"
+  | "etf"
   | "portfolio"
   | "risk"
   | "ssi"
   | "sodex"
   | "yield"
-  | "macro"
   | "treasury"
   | "execution"
   | "guardian"
   | "estate"
-  | "tax";
+  | "tax"
+  | "market_monitor"
+  | "news"
+  | "alert"
+  | "memory"
+  | "continuity";
 
 export type SkillPermission =
   | "read"
@@ -27,10 +33,10 @@ export interface SkillDefinition {
   name: string;
   description: string;
   enabled: boolean;
-  /** Modes where this skill may run */
   modes: WealthMode[];
   permissions: SkillPermission[];
   tools: string[];
+  catalogPath?: string;
 }
 
 const BUILTIN: SkillDefinition[] = [
@@ -38,7 +44,7 @@ const BUILTIN: SkillDefinition[] = [
     id: "family_office",
     name: "Family Office",
     description:
-      "Flagship Skill — orchestrates Research → Risk → SSI → SoDEX → Execution → Continuity into one Living Loop",
+      "Flagship Skill. Orchestrates Terminal → Partner → SSI → SoDEX → ValueChain into one Living Loop.",
     enabled: true,
     modes: ["alive", "guardian", "heir"],
     permissions: ["read", "propose", "execute", "relay", "attest"],
@@ -51,58 +57,75 @@ const BUILTIN: SkillDefinition[] = [
       "ssi.snapshot",
       "sodex.portfolio",
       "policy.check",
+      "partner.debate",
+      "partner.memory",
     ],
+    catalogPath: "skills/family_office/SKILL.md",
   },
   {
     id: "research",
     name: "Research",
-    description: "SoSoValue Terminal research synthesis",
+    description: "SoSoValue Terminal synthesis: ETF, news, and macro in one cited layer.",
     enabled: true,
     modes: ["alive", "guardian", "heir"],
     permissions: ["read", "propose"],
     tools: ["soso.news", "soso.etf", "soso.macro", "ai.chat"],
+    catalogPath: "skills/research/SKILL.md",
   },
   {
     id: "macro",
     name: "Macro",
-    description: "Macro calendar and event correlation",
+    description: "Macro calendar and event correlation against open theses.",
     enabled: true,
     modes: ["alive", "guardian"],
     permissions: ["read", "propose"],
     tools: ["soso.macro"],
+    catalogPath: "skills/macro/SKILL.md",
+  },
+  {
+    id: "etf",
+    name: "ETF",
+    description: "ETF flow history and Terminal index drift for allocation signals.",
+    enabled: true,
+    modes: ["alive", "guardian", "heir"],
+    permissions: ["read", "propose"],
+    tools: ["soso.etf", "ssi.snapshot"],
+    catalogPath: "skills/etf/SKILL.md",
   },
   {
     id: "portfolio",
     name: "Portfolio",
-    description: "Per-user SoDEX + SSI portfolio views",
+    description: "Per-wallet SoDEX holdings and SSI exposure with living narrative.",
     enabled: true,
     modes: ["alive", "guardian", "heir"],
     permissions: ["read"],
-    tools: ["sodex.portfolio", "ssi.index"],
+    tools: ["sodex.portfolio", "ssi.index", "fo.partner.portfolio"],
+    catalogPath: "skills/portfolio/SKILL.md",
   },
   {
     id: "risk",
     name: "Risk",
-    description: "Policy, notional caps, kill switch",
+    description: "Policy caps, preflight verdicts, and continuity gates before execution.",
     enabled: true,
     modes: ["alive", "guardian"],
     permissions: ["read", "propose"],
-    tools: ["policy.check"],
+    tools: ["policy.check", "fo.partner.gate"],
+    catalogPath: "skills/risk/SKILL.md",
   },
   {
     id: "ssi",
     name: "SSI",
-    description:
-      "Terminal index analytics + whitepaper Base contracts; allocate via official SSI app",
+    description: "SSI index analytics plus whitepaper-verified Base contracts.",
     enabled: true,
     modes: ["alive", "guardian"],
     permissions: ["read", "propose"],
     tools: ["ssi.constituents", "ssi.snapshot", "ssi.config"],
+    catalogPath: "skills/ssi/SKILL.md",
   },
   {
     id: "sodex",
     name: "SoDEX",
-    description: "Per-user SoDEX verify + portfolio + markets",
+    description: "Markets, verify, and portfolio reads on the SoDEX execution venue.",
     enabled: true,
     modes: ["alive", "guardian"],
     permissions: ["read"],
@@ -111,56 +134,109 @@ const BUILTIN: SkillDefinition[] = [
   {
     id: "execution",
     name: "Execution",
-    description: "User-signed SoDEX relay under policy",
+    description: "User-signed SoDEX relay under on-chain and server policy.",
     enabled: true,
     modes: ["alive"],
     permissions: ["propose", "relay", "execute"],
     tools: ["sodex.relay"],
-  },
-  {
-    id: "yield",
-    name: "Yield",
-    description: "Yield opportunities (SSI earn / SoDEX)",
-    enabled: false,
-    modes: ["alive", "guardian"],
-    permissions: ["read", "propose"],
-    tools: [],
+    catalogPath: "skills/execution/SKILL.md",
   },
   {
     id: "treasury",
     name: "Treasury",
-    description: "Treasury sleeve management",
-    enabled: false,
+    description: "Stable sleeve monitoring and rebalance proposals.",
+    enabled: true,
     modes: ["alive", "guardian"],
     permissions: ["read", "propose"],
-    tools: [],
+    tools: ["sodex.portfolio", "ssi.snapshot", "policy.check"],
+    catalogPath: "skills/treasury/SKILL.md",
+  },
+  {
+    id: "market_monitor",
+    name: "Market Monitor",
+    description: "Background pulse, snapshots, and what-changed digests for Partner.",
+    enabled: true,
+    modes: ["alive", "guardian", "heir"],
+    permissions: ["read", "propose"],
+    tools: ["fo.partner.changed", "fo.partner.radar", "fo.partner.pulse"],
+    catalogPath: "skills/market_monitor/SKILL.md",
+  },
+  {
+    id: "news",
+    name: "News",
+    description: "Hot news ingestion for timely thesis pressure and falsify triggers.",
+    enabled: true,
+    modes: ["alive", "guardian", "heir"],
+    permissions: ["read", "propose"],
+    tools: ["soso.news"],
+    catalogPath: "skills/news/SKILL.md",
+  },
+  {
+    id: "alert",
+    name: "Alert",
+    description: "Falsify alerts, gate failures, and policy breach surfacing.",
+    enabled: true,
+    modes: ["alive", "guardian", "heir"],
+    permissions: ["read", "propose"],
+    tools: ["fo.partner.falsify", "fo.partner.gate", "guardian.alert"],
+    catalogPath: "skills/alert/SKILL.md",
+  },
+  {
+    id: "memory",
+    name: "Memory",
+    description: "Investment theses, decisions, and HIT/STOP/DRIFT learning.",
+    enabled: true,
+    modes: ["alive", "guardian", "heir"],
+    permissions: ["read", "propose", "attest"],
+    tools: ["partner.memory", "partner.thesis", "save_thesis", "fo.partner.learning"],
+    catalogPath: "skills/memory/SKILL.md",
+  },
+  {
+    id: "continuity",
+    name: "Continuity",
+    description: "Alive → Guardian → Heir modes on ValueChain with ActionLog proof.",
+    enabled: true,
+    modes: ["alive", "guardian", "heir"],
+    permissions: ["read", "propose", "attest"],
+    tools: ["policy.check", "estate.sandbox", "guardian.simulate", "valuechain.action_log"],
+    catalogPath: "skills/continuity/SKILL.md",
   },
   {
     id: "guardian",
     name: "Guardian",
-    description: "Risk-off continuity when the principal cannot act",
+    description: "Risk-off continuity when the principal cannot act.",
     enabled: true,
     modes: ["guardian", "alive"],
     permissions: ["read", "propose", "execute", "attest"],
     tools: ["guardian.alert", "guardian.simulate"],
+    catalogPath: "skills/guardian/SKILL.md",
   },
   {
-    id: "tax",
-    name: "Tax",
-    description: "Tax lot / reporting helpers",
-    enabled: false,
-    modes: ["alive", "heir"],
-    permissions: ["read"],
-    tools: [],
+    id: "yield",
+    name: "Yield",
+    description: "SSI earn and yield sleeve opportunities.",
+    enabled: true,
+    modes: ["alive", "guardian"],
+    permissions: ["read", "propose"],
+    tools: ["ssi.snapshot", "sodex.portfolio"],
   },
   {
     id: "estate",
     name: "Estate",
-    description: "Heir continuity sandbox — labeled, not the homepage",
+    description: "Heir continuity planning and estate sandbox.",
     enabled: true,
     modes: ["heir", "alive"],
     permissions: ["read", "attest"],
     tools: ["estate.sandbox"],
+  },
+  {
+    id: "tax",
+    name: "Tax",
+    description: "Tax lot helpers and reporting exports.",
+    enabled: false,
+    modes: ["alive", "heir"],
+    permissions: ["read"],
+    tools: [],
   },
 ];
 
@@ -185,7 +261,6 @@ export class SkillRegistry {
     s.enabled = enabled;
   }
 
-  /** Tools visible to the agent for a mode — disabled skills contribute nothing. */
   visibleTools(mode: WealthMode): string[] {
     const tools = new Set<string>();
     for (const s of this.skills.values()) {
@@ -204,14 +279,11 @@ export class PermissionKernel {
     skillId: SkillId,
     permission: SkillPermission,
     mode: WealthMode,
-    /** Per-user enable overrides; when set, replaces builtin `enabled` for that skill. */
     overrides?: Map<SkillId, boolean>,
   ): { ok: boolean; reason?: string } {
     const skill = this.registry.get(skillId);
     if (!skill) return { ok: false, reason: "unknown_skill" };
-    const enabled = overrides?.has(skillId)
-      ? overrides.get(skillId)!
-      : skill.enabled;
+    const enabled = overrides?.has(skillId) ? overrides.get(skillId)! : skill.enabled;
     if (!enabled) return { ok: false, reason: "skill_disabled" };
     if (!skill.modes.includes(mode)) return { ok: false, reason: "mode_blocked" };
     if (!skill.permissions.includes(permission)) {

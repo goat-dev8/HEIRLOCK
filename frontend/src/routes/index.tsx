@@ -116,20 +116,21 @@ function LandingPage() {
               AI Finance OS · On-chain
             </div>
             <h1 className="mt-5 font-display text-[clamp(2.75rem,6.5vw,5.75rem)] font-semibold leading-[1.02] tracking-[-0.03em] text-foreground">
-              HEIRLOCK
+              The AI Financial
               <br />
               <span className="bg-gradient-to-br from-accent-1 to-accent-2 bg-clip-text text-transparent">
-                Install Skills. Build your OS.
+                Operating System
               </span>
             </h1>
-            <p className="mt-5 max-w-md text-base leading-relaxed text-muted-foreground md:text-lg">
-              The AI Financial Operating System on SoSoValue. Family Office is the flagship Skill —
-              research Terminal, allocate SSI, execute SoDEX, continue on ValueChain.
+            <p className="mt-5 max-w-lg text-base leading-relaxed text-muted-foreground md:text-lg">
+              Built on SoSoValue. Terminal intelligence flows into your Investment Partner, through SSI
+              allocation and SoDEX execution, anchored on ValueChain with memory that learns from every
+              decision you sign.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link to="/app/living">
                 <Button size="lg" className="h-11 px-6">
-                  Enter Living Loop <ArrowUpRight className="ml-2 h-4 w-4" />
+                  Meet your Partner <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
               <Link to="/app/wealth" search={{ tab: "holdings" }}>
@@ -199,10 +200,11 @@ function LandingPage() {
       <section id="ecosystem" className="relative z-10 border-y border-border/60">
         <div className="mx-auto max-w-7xl px-6 py-20">
           <h2 className="max-w-2xl font-display text-3xl font-semibold tracking-tight md:text-4xl">
-            Built on SoSoValue. Load-bearing, not decorative.
+            One stack. One story. Every layer connected.
           </h2>
-          <p className="mt-4 max-w-lg text-muted-foreground">
-            Every layer is an ecosystem primitive. Replace the stack and the app disappears with it.
+          <p className="mt-4 max-w-xl text-muted-foreground">
+            Terminal feeds AI reasoning. Partner remembers. SSI structures allocation. SoDEX executes under
+            your signature. ValueChain holds continuity. Memory closes the loop.
           </p>
           <div className="mt-10 grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border/60 bg-border/40 sm:grid-cols-2 lg:grid-cols-3">
             {ECOSYSTEM.map((e) => (

@@ -24,14 +24,12 @@ function SsiPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            SSI Skill
-          </div>
-          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">
+        <div className="fade-rise space-y-3">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Structured allocation</p>
+          <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">
             SoSoValue Indexes
           </h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
             Terminal index analytics in HEIRLOCK. Mint / stake / earn on the{" "}
             <a
               href="https://ssi.sosovalue.com/"

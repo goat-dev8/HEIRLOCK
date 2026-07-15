@@ -20,7 +20,8 @@ function ContractsPage() {
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">On-chain</p>
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Contracts</h1>
         <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
-          Policy, continuity, and action log addresses on ValueChain — yours to verify on the explorer.
+          WealthPolicy, ModeController, ActionLog, and AttestationRegistry on ValueChain — the on-chain
+          spine that binds SoDEX execution to continuity and audit.
         </p>
       </div>
       {isLoading ? (

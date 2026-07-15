@@ -23,7 +23,8 @@ function SettingsPage() {
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Account</p>
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Settings</h1>
         <p className="max-w-xl text-lg leading-relaxed text-muted-foreground">
-          Session, network, and environment — kept simple on purpose.
+          Wallet session, network, and Skills registry. Your OS configuration stays minimal — the Partner
+          carries the intelligence.
         </p>
       </div>
 

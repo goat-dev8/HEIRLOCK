@@ -34,9 +34,10 @@ scripts/.render-deploy-state.json
 *.7z
 *.rar
 
-# ── Markdown: public root README only (all other docs stay local) ───
+# ── Markdown: README + skills catalog only (strategy docs stay local) ───
 *.md
 !/README.md
+!/skills/**/*.md
 docs/
 projects.md
 

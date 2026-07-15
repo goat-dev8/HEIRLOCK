@@ -67,7 +67,8 @@ function ContinuityPage() {
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Wealth continuity</p>
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Continuity</h1>
         <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
-          Alive → Guardian → Heir. Policy, action log, and heirship live on ValueChain — not in a database.
+          Alive today. Guardian when risk demands it. Heir when succession matters. Modes enforced on
+          ValueChain — WealthPolicy, ActionLog, AttestationRegistry.
         </p>
       </div>
 

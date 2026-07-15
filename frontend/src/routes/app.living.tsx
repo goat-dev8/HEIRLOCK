@@ -142,9 +142,10 @@ function LivingPage() {
     <div className="mx-auto max-w-3xl space-y-8 pb-16">
       <div className="fade-rise space-y-3">
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Living Investment Partner</p>
-        <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">While you were away</h1>
+        <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Your Partner never sleeps</h1>
         <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
-          Your Partner already re-checked the market, challenged open theses, and prepared the next decision.
+          Terminal → reasoning → debate → your signature. SoSoValue evidence, SSI allocation signals,
+          SoDEX execution, ValueChain continuity — one loop, cited end to end.
         </p>
       </div>
       <RequireAuth>

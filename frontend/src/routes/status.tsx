@@ -19,10 +19,10 @@ function StatusPage() {
     <div className="mx-auto min-h-[100dvh] max-w-5xl space-y-6 px-4 py-10 lg:px-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">System status</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Public health of the HEIRLOCK API and trading safety caps. Not part of your wealth
-            journey.
+          <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Platform status</h1>
+          <p className="mt-2 max-w-xl text-lg leading-relaxed text-muted-foreground">
+            Live health for the AI Financial OS — API, SoSoValue Terminal, SoDEX relay, SSI feeds, and
+            AI providers across the stack.
           </p>
         </div>
         <Link to="/app/living" className="text-sm text-accent-1 hover:underline">

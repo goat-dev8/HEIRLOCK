@@ -19,7 +19,8 @@ function ResearchPage() {
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Intelligence</p>
         <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Research</h1>
         <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
-          Live market intelligence — news, flows, and signals your Partner already weighed.
+          SoSoValue Terminal intelligence — hot news, ETF flows, macro — cited before your Partner
+          proposes and before you sign on SoDEX.
         </p>
       </div>
       <RequireAuth>

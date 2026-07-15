@@ -15,15 +15,13 @@ export const Route = createFileRoute("/app/track")({
 
 function TrackPage() {
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          Verifiable outcomes
-        </div>
-        <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">/track</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Proposals and fills vs Terminal index baseline. Family Office Skill outcomes stay
-          verifiable.
+    <div className="mx-auto max-w-5xl space-y-8 pb-12">
+      <div className="fade-rise space-y-3">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-accent-1">Learning engine</p>
+        <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Track</h1>
+        <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground">
+          Proposals and fills against Terminal index baseline. HIT, STOP, and DRIFT outcomes feed
+          Investment Memory and sharpen the Partner.
         </p>
       </div>
       <RequireAuth>
