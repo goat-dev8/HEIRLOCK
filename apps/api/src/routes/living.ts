@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { AppContext } from "../app.js";
 import { createRequireWallet } from "../auth/requireWallet.js";
 import { listTrack, pushTrack } from "../fo/track.js";
-import { FO_AI_TOOLS, runFoTool } from "../fo/ai-tools.js";
+import { foChatToolsForMessage, runFoTool } from "../fo/ai-tools.js";
 import { computeLivingLoop } from "../fo/living-loop.js";
 import * as memory from "../fo/memory.js";
 import { canForWallet } from "../skills/persist.js";
@@ -387,47 +387,52 @@ export async function registerLivingRoutes(app: FastifyInstance, ctx: AppContext
     const citations: Array<{ source: string; endpoint: string; at: string; status: string }> = [];
     const toolTrace: Array<{ name: string; args: string; resultPreview: string }> = [];
     const thesesSaved: Array<{ id: string; statement: string }> = [];
+    const started = Date.now();
 
-    const memoryContext = await memory.memoryContextForAI(wallet);
-    const focusedThesis = body.data.thesisId
-      ? await memory.getThesis(wallet, body.data.thesisId)
-      : null;
-
-    const living = await computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: fo.reason });
+    // Prefetch in parallel — Living Loop is TTL-cached across Partner surfaces.
+    const [memoryContext, focusedThesis, living] = await Promise.all([
+      memory.memoryContextForAI(wallet),
+      body.data.thesisId ? memory.getThesis(wallet, body.data.thesisId) : Promise.resolve(null),
+      computeLivingLoop(ctx, { foEnabled: fo.ok, foReason: fo.reason }),
+    ]);
     citations.push(...living.citations);
 
-    const liveEvidence = `LIVE_EVIDENCE (prefetched at request time — cite module names, minimize redundant tool calls):
-Proposal: ${JSON.stringify(living.proposal).slice(0, 1200)}
-Drift: ${living.drift ? JSON.stringify(living.drift).slice(0, 500) : "UNAVAILABLE"}
-Preflight: ${living.preflight.verdict} (${living.liveCount}/${living.citations.length} sources LIVE)`;
+    const proposalSlim = {
+      title: living.proposal.title,
+      rationale: living.proposal.rationale,
+      action: living.proposal.action,
+      change24hPct: living.proposal.change24hPct,
+      indexLevel: living.proposal.indexLevel,
+    };
+    const driftSlim = living.drift
+      ? {
+          alert: living.drift.alert,
+          action: living.drift.action,
+          signal: living.drift.signal,
+          driftPct: living.drift.driftPct,
+        }
+      : null;
 
-    const system = `You are HEIRLOCK's Investment Partner — a persistent agent on the SoSoValue stack, not a stateless chatbot.
+    const liveEvidence = `LIVE_EVIDENCE (already fetched — answer from this; do not re-fetch):
+Proposal: ${JSON.stringify(proposalSlim)}
+Drift: ${driftSlim ? JSON.stringify(driftSlim) : "UNAVAILABLE"}
+Preflight: ${living.preflight.verdict} (${living.liveCount}/${living.citations.length} LIVE)`;
 
-You understand this wallet's full context:
-- Portfolio: SoDEX balances, open orders, and SSI index exposure
-- Markets: SoSoValue Terminal ETF flows, hot news, macro calendar
-- Memory: saved theses, decisions, debate outcomes, HIT/STOP/DRIFT learning
-- Continuity: Alive / Guardian / Heir policy on ValueChain
-- Execution: non-custodial SoDEX relay; user wallet always signs
-- Evidence: Living Loop proposal, drift, preflight, and citation graph
+    const system = `You are HEIRLOCK's Investment Partner on SoSoValue (Terminal → Partner → SSI → SoDEX → ValueChain).
 
 Rules:
-- LIVE_EVIDENCE below is prefetched — use it first; call tools only for gaps.
-- If a tool returns UNAVAILABLE, say UNAVAILABLE — never invent prices, balances, or addresses.
+- Answer from LIVE_EVIDENCE + MEMORY only unless a tool is provided for a real gap.
+- Never invent prices, balances, addresses, or AUM. Say UNAVAILABLE when missing.
 - Cite modules by name (etf, feeds, macro, index, sodex, memory, policy).
-- Never invent SSI contract addresses, balances, or AUM.
-- Refuse legal/tax advice.
-- When asked to save or remember a view, call save_thesis with a falsifiable statement.
-- When challenged on a thesis, weigh MEMORY and LIVE_EVIDENCE; say plainly if it still holds.
-- Connect Terminal → AI reasoning → Partner → SSI → SoDEX → ValueChain → Memory → Continuity in plain language.
-- Be concise and premium in tone.
+- Refuse legal/tax advice. Be concise (≤180 words) and decisive.
+- If asked to remember/save a view and save_thesis is available, call it once.
 
 ${liveEvidence}
 
-MEMORY (this wallet's recorded history — ground answers here):
+MEMORY:
 ${memoryContext}${
       focusedThesis
-        ? `\n\nFOCUSED THESIS the user wants challenged/reviewed:\n"${focusedThesis.statement}" (status: ${focusedThesis.status}, confidence: ${focusedThesis.confidence}%)`
+        ? `\n\nFOCUSED THESIS:\n"${focusedThesis.statement}" (${focusedThesis.status}, ${focusedThesis.confidence}%)`
         : ""
     }`;
 
@@ -442,22 +447,26 @@ ${memoryContext}${
       { role: "user", content: body.data.message },
     ];
 
+    const tools = foChatToolsForMessage(body.data.message);
+    const chatOpts = {
+      thinking: false as const,
+      maxTokens: 448,
+      temperature: 0.3,
+    };
+
     try {
       let res = await ctx.ai.chat({
         messages: messages as never,
-        tools: FO_AI_TOOLS,
-        thinking: false,
-        maxTokens: 1024,
+        ...(tools.length ? { tools } : {}),
+        ...chatOpts,
       });
 
-      let rounds = 0;
-      while (res.toolCalls?.length && rounds < 2) {
-        rounds += 1;
+      // At most one tool round — challenge/review chats usually need zero.
+      if (res.toolCalls?.length && tools.length) {
         messages.push({
           role: "assistant",
           content: res.content || "",
-          // OpenAI-compatible history needs tool_calls on the assistant turn
-          ...( { tool_calls: res.toolCalls } as object ),
+          ...({ tool_calls: res.toolCalls } as object),
         } as Msg);
 
         for (const call of res.toolCalls) {
@@ -475,7 +484,11 @@ ${memoryContext}${
           });
           if (call.function.name === "save_thesis") {
             try {
-              const parsed = JSON.parse(executed.result) as { saved?: boolean; thesisId?: string; statement?: string };
+              const parsed = JSON.parse(executed.result) as {
+                saved?: boolean;
+                thesisId?: string;
+                statement?: string;
+              };
               if (parsed.saved && parsed.thesisId) {
                 thesesSaved.push({ id: parsed.thesisId, statement: parsed.statement ?? "" });
               }
@@ -493,13 +506,11 @@ ${memoryContext}${
 
         res = await ctx.ai.chat({
           messages: messages as never,
-          tools: FO_AI_TOOLS,
-          thinking: false,
-          maxTokens: 1024,
+          ...chatOpts,
         });
       }
 
-      // Persist audit trace
+      const latencyMs = Date.now() - started;
       try {
         const profile = await prisma.userProfile.findUnique({
           where: { walletAddress: wallet.toLowerCase() },
@@ -513,8 +524,10 @@ ${memoryContext}${
             detail: JSON.stringify({
               message: body.data.message.slice(0, 500),
               toolTrace,
+              toolsOffered: tools.map((t) => t.function.name),
               citations,
               contentPreview: (res.content ?? "").slice(0, 800),
+              wallMs: latencyMs,
             }),
             latencyMs: res.latencyMs,
           },
@@ -529,7 +542,7 @@ ${memoryContext}${
         model: res.model,
         content: res.content,
         reasoning: res.reasoning,
-        latencyMs: res.latencyMs,
+        latencyMs,
         toolTrace,
         thesesSaved,
         citations: citations.map((c) => ({
@@ -540,25 +553,14 @@ ${memoryContext}${
         })),
       };
     } catch (toolErr) {
-      // Fallback when no tool-calling provider is available: prefetch context once.
-      const citationsFb = [...citations];
-      let contextBlock = "";
-      for (const name of ["soso_etf", "soso_news", "ssi_snapshot"] as const) {
-        const executed = await runFoTool(ctx, name, "{}", wallet);
-        citationsFb.push(executed.citation);
-        contextBlock += `\n${name}: ${executed.result.slice(0, 1200)}`;
-      }
+      // Fast fallback: no extra Terminal fetches — evidence already in system prompt.
       try {
         const res = await ctx.ai.chat({
           messages: [
-            {
-              role: "system",
-              content: `${system}\n\nCONTEXT:${contextBlock || "\n(no live modules)"}`,
-            },
+            { role: "system", content: system },
             { role: "user", content: body.data.message },
           ],
-          thinking: false,
-          maxTokens: 1024,
+          ...chatOpts,
         });
         return {
           status: "LIVE",
@@ -566,12 +568,12 @@ ${memoryContext}${
           model: res.model,
           content: res.content,
           reasoning: res.reasoning,
-          latencyMs: res.latencyMs,
+          latencyMs: Date.now() - started,
           toolTrace,
           thesesSaved: [],
           fallback: true,
           fallbackReason: toolErr instanceof Error ? toolErr.message : String(toolErr),
-          citations: citationsFb.map((c) => ({
+          citations: citations.map((c) => ({
             module: c.source,
             path: c.endpoint,
             status: c.status,
@@ -581,7 +583,7 @@ ${memoryContext}${
       } catch (err) {
         return reply.code(502).send({
           error: err instanceof Error ? err.message : "AI failure",
-          citations: citationsFb.map((c) => ({
+          citations: citations.map((c) => ({
             module: c.source,
             path: c.endpoint,
             status: c.status,

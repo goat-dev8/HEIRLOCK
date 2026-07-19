@@ -25,7 +25,42 @@ export type LivingLoopResult = {
   liveCount: number;
 };
 
+const LOOP_TTL_MS = 45_000;
+type LoopCacheEntry = { at: number; foEnabled: boolean; result: LivingLoopResult };
+let loopCache: LoopCacheEntry | null = null;
+const loopInflight = new Map<string, Promise<LivingLoopResult>>();
+
+/** Drop the shared Living Loop cache (tests / forced refresh). */
+export function invalidateLivingLoopCache() {
+  loopCache = null;
+  loopInflight.clear();
+}
+
 export async function computeLivingLoop(
+  ctx: AppContext,
+  opts: { foEnabled: boolean; foReason?: string },
+): Promise<LivingLoopResult> {
+  const hit = loopCache;
+  if (hit && hit.foEnabled === opts.foEnabled && Date.now() - hit.at < LOOP_TTL_MS) {
+    return hit.result;
+  }
+  const key = opts.foEnabled ? "1" : "0";
+  const pending = loopInflight.get(key);
+  if (pending) return pending;
+
+  const job = computeLivingLoopFresh(ctx, opts)
+    .then((result) => {
+      loopCache = { at: Date.now(), foEnabled: opts.foEnabled, result };
+      return result;
+    })
+    .finally(() => {
+      loopInflight.delete(key);
+    });
+  loopInflight.set(key, job);
+  return job;
+}
+
+async function computeLivingLoopFresh(
   ctx: AppContext,
   opts: { foEnabled: boolean; foReason?: string },
 ): Promise<LivingLoopResult> {

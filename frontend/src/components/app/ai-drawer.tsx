@@ -131,7 +131,7 @@ export function AiDrawer({
       }>("/api/fo/ai/chat", {
         method: "POST",
         auth: true,
-        timeoutMs: 170_000,
+        timeoutMs: 55_000,
         body: { message: text.trim(), thesisId },
       });
       setMsgs((m) => [

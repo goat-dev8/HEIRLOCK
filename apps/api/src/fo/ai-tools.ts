@@ -7,6 +7,29 @@ import type { ToolDefinition } from "@heirlock/ai-provider";
 import { normalizeSsiSnapshot } from "../sodex/mark-to-market.js";
 import * as memory from "./memory.js";
 
+/** Subset of tools for Partner chat — avoid redundant Terminal fetches when evidence is prefetched. */
+export function foChatToolsForMessage(message: string): ToolDefinition[] {
+  const m = message.toLowerCase();
+  const needsSave = /\b(remember|save|track|memorize|keep this)\b/.test(m);
+  const needsPortfolio = /\b(balance|portfolio|orders|positions|my (account|wallet|sodex))\b/.test(m);
+  const needsFreshMarket =
+    /\b(etf|news|macro|calendar|flows?)\b/.test(m) &&
+    /\b(fetch|pull|latest|refresh|check|get|look up)\b/.test(m);
+
+  if (!needsSave && !needsPortfolio && !needsFreshMarket) return [];
+
+  const names = new Set<string>();
+  if (needsSave) names.add("save_thesis");
+  if (needsPortfolio) names.add("sodex_portfolio");
+  if (needsFreshMarket) {
+    names.add("soso_etf");
+    names.add("soso_news");
+    names.add("soso_macro");
+    names.add("ssi_snapshot");
+  }
+  return FO_AI_TOOLS.filter((t) => names.has(t.function.name));
+}
+
 export const FO_AI_TOOLS: ToolDefinition[] = [
   {
     type: "function",
