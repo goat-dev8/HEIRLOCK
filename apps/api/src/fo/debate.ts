@@ -155,32 +155,63 @@ function parseModeratorStance(text: string): DebateResult["synthesis"]["stance"]
   return m[1]!.toLowerCase() as DebateResult["synthesis"]["stance"];
 }
 
-/** Hard kill conditions that must force WAIT — never APPROVE size. */
-export function evidenceKillReasons(loop: LivingLoopResult): string[] {
-  const reasons: string[] = [];
-  if (loop.preflight.verdict === "BLOCK") {
-    reasons.push("preflight BLOCK");
+/** True when the Living Loop is proposing size / allocate — not a hold/review. */
+export function isSizeIncreasingProposal(loop: LivingLoopResult): boolean {
+  const action = String(loop.proposal.action ?? "").toUpperCase();
+  const title = String(loop.proposal.title ?? "").toLowerCase();
+  if (loop.drift?.alert) return true;
+  if (action.includes("ALLOCATE") || action.includes("REBALANCE") || action.includes("BUY")) {
+    return true;
   }
+  if (title.includes("hold") || title.includes("confirm") || action.includes("REVIEW")) {
+    return false;
+  }
+  return false;
+}
+
+/**
+ * Soft gaps (missing on-chain quote on a HOLD) should not force INVALIDATE.
+ * Hard gaps (BLOCK, or size-up without dual-source) force WAIT.
+ */
+export function classifyEvidenceGaps(loop: LivingLoopResult): {
+  hard: string[];
+  soft: string[];
+} {
+  const soft: string[] = [];
+  const hard: string[] = [];
+
+  if (loop.preflight.verdict === "BLOCK") {
+    hard.push("preflight BLOCK");
+  }
+
   const ssiToken = loop.citations.find((c) => c.source === "ssi_token");
   if (ssiToken?.status === "UNAVAILABLE") {
-    reasons.push("on-chain SSI token quote UNAVAILABLE");
+    soft.push("on-chain SSI token quote UNAVAILABLE");
   }
   if (loop.drift?.action === "UNAVAILABLE") {
-    reasons.push("dual-source SSI drift UNAVAILABLE");
+    soft.push("dual-source SSI drift UNAVAILABLE");
   }
   const onChain = loop.proposal?.onChainToken as
     | { priceUsd?: number | null; change24hPct?: number | null }
     | null
     | undefined;
   if (onChain && onChain.priceUsd == null && onChain.change24hPct == null) {
-    if (!reasons.some((r) => r.includes("on-chain"))) {
-      reasons.push("on-chain token price UNAVAILABLE");
+    if (!soft.some((r) => r.includes("on-chain"))) {
+      soft.push("on-chain token price UNAVAILABLE");
     }
   }
-  if (loop.preflight.verdict === "CAUTION" && reasons.length > 0) {
-    // CAUTION alone is soft; CAUTION + missing on-chain is hard
+
+  if (isSizeIncreasingProposal(loop) && soft.length > 0) {
+    hard.push(...soft);
+    return { hard, soft: [] };
   }
-  return reasons;
+
+  return { hard, soft };
+}
+
+/** @deprecated use classifyEvidenceGaps — kept for tests */
+export function evidenceKillReasons(loop: LivingLoopResult): string[] {
+  return classifyEvidenceGaps(loop).hard;
 }
 
 function fallbackSynthesize(
@@ -188,12 +219,12 @@ function fallbackSynthesize(
   falsifier: string,
   loop: LivingLoopResult,
 ): DebateResult["synthesis"] {
-  const kills = evidenceKillReasons(loop);
-  if (kills.length > 0) {
+  const { hard } = classifyEvidenceGaps(loop);
+  if (hard.length > 0) {
     return {
       stance: "wait",
       confidence: 88,
-      summary: `Evidence incomplete (${kills.join("; ")}) — WAIT before Approve.`,
+      summary: `Evidence incomplete (${hard.join("; ")}) — WAIT before Approve.`,
     };
   }
 
@@ -242,7 +273,7 @@ function applyEvidenceOverrides(
   synthesis: DebateResult["synthesis"],
   loop: LivingLoopResult,
 ): DebateResult["synthesis"] {
-  const kills = evidenceKillReasons(loop);
+  const { hard } = classifyEvidenceGaps(loop);
   if (loop.preflight.verdict === "BLOCK") {
     return {
       stance: "wait",
@@ -250,11 +281,11 @@ function applyEvidenceOverrides(
       summary: "Moderator overridden: WealthPolicy preflight BLOCK — wait.",
     };
   }
-  if (kills.length > 0 && synthesis.stance === "approve") {
+  if (hard.length > 0 && synthesis.stance === "approve") {
     return {
       stance: "wait",
       confidence: 90,
-      summary: `Moderator overridden: cannot APPROVE while ${kills.join("; ")}.`,
+      summary: `Moderator overridden: cannot APPROVE size while ${hard.join("; ")}.`,
     };
   }
   return synthesis;
@@ -300,6 +331,55 @@ export function buildDeterministicDebate(
   };
 }
 
+/**
+ * HOLD / review proposals with soft evidence gaps — approve the hold, not a size-up.
+ * Richer than INVALIDATE, and still honest about missing dual-source quotes.
+ */
+export function buildHoldDebate(
+  loop: LivingLoopResult,
+  soft: string[],
+  memoryUsed: { openTheses: number; recentDecisions: number },
+  env: { ssiAppUrl?: string; maxNotionalUsd?: number },
+  started: number,
+): DebateResult {
+  const gap = soft.join("; ") || "proxy quote incomplete";
+  const change =
+    loop.proposal.change24hPct != null
+      ? `${Number(loop.proposal.change24hPct).toFixed(2)}% 24h`
+      : "n/a";
+  const level =
+    loop.proposal.indexLevel != null ? String(loop.proposal.indexLevel) : "n/a";
+  const counsel: DebateSide = {
+    role: "counsel",
+    content: `Proposal is a HOLD/review, not a size-up. Terminal MAG7 level ${level} (${change}) is LIVE. Soft gaps (${gap}) block increasing size, not holding. Counsel recommends: APPROVE — keep exposure; confirm SoDEX proxy liquidity before any larger trade.`,
+  };
+  const falsifier: DebateSide = {
+    role: "falsifier",
+    content: `Soft gaps remain: ${gap}. That kills any ALLOCATE/size increase today, but does not falsify a hold. Falsifier recommends: WAIT on size — challenge only if user tries to size up without LIVE dual-source quotes.`,
+  };
+  const synthesis: DebateResult["synthesis"] = {
+    stance: "approve",
+    confidence: 74,
+    summary: `Approve hold under policy. Soft evidence gaps (${gap}) mean no size-up until dual-source quotes are LIVE.`,
+  };
+  const moderator: DebateSide = {
+    role: "moderator",
+    content: `${synthesis.summary}\nFINAL: APPROVE`,
+  };
+  return {
+    status: "LIVE",
+    proposalTitle: String(loop.proposal.title ?? ""),
+    counsel,
+    falsifier,
+    moderator,
+    synthesis,
+    actionPlan: buildActionPlan(loop, synthesis, env),
+    citations: loop.citations,
+    memoryUsed,
+    latencyMs: Date.now() - started,
+  };
+}
+
 export async function runMemoryDebate(
   ctx: AppContext,
   wallet: string,
@@ -315,9 +395,9 @@ export async function runMemoryDebate(
   const maxNotional = Math.min(ctx.env.TRADING_MAX_NOTIONAL_USD, ctx.env.MAINNET_TEST_MAX_NOTIONAL_USD);
   const planEnv = { ssiAppUrl: ctx.env.SSI_APP_URL, maxNotionalUsd: maxNotional };
 
-  // Fast path: hard kill evidence → skip 3 LLM calls (seconds → ms)
-  const kills = evidenceKillReasons(loop);
-  if (kills.length > 0) {
+  const gaps = classifyEvidenceGaps(loop);
+  // Hard kills (size-up without dual-source, or BLOCK) → instant WAIT
+  if (gaps.hard.length > 0) {
     const fast = buildDeterministicDebate(loop, memoryUsed, planEnv, started);
     try {
       const profile = await prisma.userProfile.findUnique({
@@ -331,8 +411,8 @@ export async function runMemoryDebate(
           event: "fo.partner.debate",
           detail: JSON.stringify({
             proposal: loop.proposal.title,
-            path: "deterministic",
-            kills,
+            path: "deterministic-hard",
+            kills: gaps.hard,
             synthesis: fast.synthesis,
           }),
           latencyMs: fast.latencyMs,
@@ -342,6 +422,34 @@ export async function runMemoryDebate(
       /* non-fatal */
     }
     return fast;
+  }
+
+  // HOLD + soft gaps → approve hold (honest about missing quotes) without INVALIDATE spam
+  if (gaps.soft.length > 0 && !isSizeIncreasingProposal(loop)) {
+    const hold = buildHoldDebate(loop, gaps.soft, memoryUsed, planEnv, started);
+    try {
+      const profile = await prisma.userProfile.findUnique({
+        where: { walletAddress: wallet.toLowerCase() },
+      });
+      await prisma.agentLog.create({
+        data: {
+          userId: profile?.id,
+          provider: "deterministic",
+          model: "hold-soft-gap",
+          event: "fo.partner.debate",
+          detail: JSON.stringify({
+            proposal: loop.proposal.title,
+            path: "deterministic-hold",
+            soft: gaps.soft,
+            synthesis: hold.synthesis,
+          }),
+          latencyMs: hold.latencyMs,
+        },
+      });
+    } catch {
+      /* non-fatal */
+    }
+    return hold;
   }
 
   const evidenceBlock = `LIVE_EVIDENCE (authoritative — never invent numbers beyond this):
@@ -356,12 +464,15 @@ Recent choices: ${decisions
 
   const counselSystem = `You are COUNSEL for HEIRLOCK's Living Investment Partner.
 Defend the proposal ONLY with LIVE_EVIDENCE. Never invent prices, AUM, or addresses.
-HARD RULE: if any critical citation is UNAVAILABLE, on-chain price is null, or drift action is UNAVAILABLE, you MUST recommend WAIT (never APPROVE).
-Be concise (≤90 words). End with: "Counsel recommends: APPROVE|WAIT" and why.`;
+Rules:
+- HOLD/review proposals may be APPROVE even if proxy quote is incomplete — say so.
+- Size-up / allocate proposals require LIVE dual-source evidence; otherwise WAIT.
+Be concise (≤100 words). End with: "Counsel recommends: APPROVE|WAIT" and why.`;
 
   const falsifierSystem = `You are the FALSIFIER for HEIRLOCK's Living Investment Partner.
-Kill the proposal when evidence allows. Prefer: drift alerts, UNAVAILABLE sources, null on-chain price, BLOCK/CAUTION preflight, thesis contradictions.
-Never invent prices. Be concise (≤90 words). End with: "Falsifier recommends: CHALLENGE|WAIT|INVALIDATE" and why.`;
+Attack weak size-ups. Prefer: drift alerts, UNAVAILABLE sources on ALLOCATE, BLOCK preflight, thesis contradictions.
+Do not INVALIDATE a plain HOLD solely because a proxy quote is soft-missing — recommend WAIT on size instead.
+Never invent prices. Be concise (≤100 words). End with: "Falsifier recommends: CHALLENGE|WAIT|INVALIDATE" and why.`;
 
   const userMsg = `Debate the proposal: "${String(loop.proposal.title ?? "current proposal")}".\n\n${evidenceBlock}`;
 

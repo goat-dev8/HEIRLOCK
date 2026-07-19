@@ -11,7 +11,7 @@ export type OnChainTokenQuote = {
   priceUsd: number | null;
   change24hPct: number | null;
   pairUrl: string | null;
-  source: "dexscreener";
+  source: "dexscreener" | "sodex";
   status: "LIVE" | "UNAVAILABLE";
 };
 
@@ -88,7 +88,70 @@ function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
-/** Fetch Base ERC-20 USD quote + 24h change from DexScreener (public). */
+/** Map SSI token symbol → SoDEX proxy ticker (fallback when DexScreener is blocked). */
+const SODEx_PROXY_SYMBOL: Record<string, string> = {
+  "MAG7.ssi": "vMAG7ssi_vUSDC",
+  "DEFI.ssi": "vDEFIssi_vUSDC",
+  "MEME.ssi": "vMEMEssi_vUSDC",
+  USSI: "vUSSI_vUSDC",
+};
+
+function unwrapTickerList(body: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(body)) return body as Array<Record<string, unknown>>;
+  const o = asRecord(body);
+  for (const key of ["data", "list", "tickers", "items"]) {
+    const v = o[key];
+    if (Array.isArray(v)) return v as Array<Record<string, unknown>>;
+    if (v && typeof v === "object") {
+      const nested = unwrapTickerList(v);
+      if (nested.length) return nested;
+    }
+  }
+  return [];
+}
+
+async function fetchSodexProxyQuote(opts: {
+  symbol: string;
+  fetchImpl: typeof fetch;
+}): Promise<{ priceUsd: number | null; change24hPct: number | null; pairUrl: string | null }> {
+  const proxy = SODEx_PROXY_SYMBOL[opts.symbol];
+  if (!proxy) return { priceUsd: null, change24hPct: null, pairUrl: null };
+  const gateways = [
+    "https://mainnet-gw.sodex.dev/api/v1/spot/markets/tickers",
+    "https://testnet-gw.sodex.dev/api/v1/spot/markets/tickers",
+  ];
+  for (const url of gateways) {
+    try {
+      const res = await opts.fetchImpl(url, {
+        headers: {
+          accept: "application/json",
+          "user-agent": "HEIRLOCK/1.0 (+https://getheirlock.vercel.app)",
+        },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!res.ok) continue;
+      const rows = unwrapTickerList(await res.json());
+      const hit = rows.find(
+        (r) => String(r.symbol ?? r.s ?? "").toUpperCase() === proxy.toUpperCase(),
+      );
+      if (!hit) continue;
+      const last = Number(hit.lastPrice ?? hit.last ?? hit.c ?? hit.price);
+      const chg = Number(hit.priceChangePercent24h ?? hit.change24h ?? hit.P);
+      if (Number.isFinite(last) && last > 0) {
+        return {
+          priceUsd: last,
+          change24hPct: Number.isFinite(chg) ? chg : null,
+          pairUrl: `sodex:${proxy}`,
+        };
+      }
+    } catch {
+      /* try next gateway */
+    }
+  }
+  return { priceUsd: null, change24hPct: null, pairUrl: null };
+}
+
+/** Fetch Base ERC-20 USD quote + 24h change from DexScreener; SoDEX proxy fallback. */
 export async function fetchOnChainTokenQuote(opts: {
   symbol: string;
   address: string;
@@ -106,53 +169,77 @@ export async function fetchOnChainTokenQuote(opts: {
     status: "UNAVAILABLE",
   };
 
-  try {
-    const res = await fetchImpl(
-      `https://api.dexscreener.com/latest/dex/tokens/${address}`,
-      { headers: { accept: "application/json" } },
-    );
-    if (!res.ok) return base;
-    const body = asRecord(await res.json());
-    const pairs = Array.isArray(body.pairs) ? body.pairs : [];
-    if (pairs.length === 0) return base;
+  const tryDex = async (): Promise<OnChainTokenQuote | null> => {
+    try {
+      const res = await fetchImpl(
+        `https://api.dexscreener.com/latest/dex/tokens/${address}`,
+        {
+          headers: {
+            accept: "application/json",
+            "user-agent": "HEIRLOCK/1.0 (+https://getheirlock.vercel.app)",
+          },
+          signal: AbortSignal.timeout(8_000),
+        },
+      );
+      if (!res.ok) return null;
+      const body = asRecord(await res.json());
+      const pairs = Array.isArray(body.pairs) ? body.pairs : [];
+      if (pairs.length === 0) return null;
 
-    // Prefer highest liquidity USD among Base pairs, else any pair.
-    const ranked = pairs
-      .map((p) => {
-        const r = asRecord(p);
-        const liq = asRecord(r.liquidity);
-        const pc = asRecord(r.priceChange);
-        const liquidityUsd = Number(liq.usd ?? 0);
-        const priceUsd = Number(r.priceUsd);
-        const change24hPct = Number(pc.h24);
-        return {
-          chainId: String(r.chainId ?? ""),
-          liquidityUsd: Number.isFinite(liquidityUsd) ? liquidityUsd : 0,
-          priceUsd: Number.isFinite(priceUsd) && priceUsd > 0 ? priceUsd : null,
-          change24hPct: Number.isFinite(change24hPct) ? change24hPct : null,
-          url: typeof r.url === "string" ? r.url : null,
-        };
-      })
-      .sort((a, b) => {
-        const aBase = a.chainId === "base" || a.chainId === "8453" ? 1 : 0;
-        const bBase = b.chainId === "base" || b.chainId === "8453" ? 1 : 0;
-        if (aBase !== bBase) return bBase - aBase;
-        return b.liquidityUsd - a.liquidityUsd;
-      });
+      const ranked = pairs
+        .map((p) => {
+          const r = asRecord(p);
+          const liq = asRecord(r.liquidity);
+          const pc = asRecord(r.priceChange);
+          const liquidityUsd = Number(liq.usd ?? 0);
+          const priceUsd = Number(r.priceUsd);
+          const change24hPct = Number(pc.h24);
+          return {
+            chainId: String(r.chainId ?? ""),
+            liquidityUsd: Number.isFinite(liquidityUsd) ? liquidityUsd : 0,
+            priceUsd: Number.isFinite(priceUsd) && priceUsd > 0 ? priceUsd : null,
+            change24hPct: Number.isFinite(change24hPct) ? change24hPct : null,
+            url: typeof r.url === "string" ? r.url : null,
+          };
+        })
+        .sort((a, b) => {
+          const aBase = a.chainId === "base" || a.chainId === "8453" ? 1 : 0;
+          const bBase = b.chainId === "base" || b.chainId === "8453" ? 1 : 0;
+          if (aBase !== bBase) return bBase - aBase;
+          return b.liquidityUsd - a.liquidityUsd;
+        });
 
-    const best = ranked[0];
-    if (!best || best.priceUsd == null) return base;
+      const best = ranked[0];
+      if (!best || best.priceUsd == null) return null;
+      return {
+        ...base,
+        priceUsd: best.priceUsd,
+        change24hPct: best.change24hPct,
+        pairUrl: best.url,
+        status: "LIVE",
+      };
+    } catch {
+      return null;
+    }
+  };
 
+  const first = await tryDex();
+  if (first) return first;
+  const retry = await tryDex();
+  if (retry) return retry;
+
+  const sodex = await fetchSodexProxyQuote({ symbol: opts.symbol, fetchImpl });
+  if (sodex.priceUsd != null) {
     return {
       ...base,
-      priceUsd: best.priceUsd,
-      change24hPct: best.change24hPct,
-      pairUrl: best.url,
+      priceUsd: sodex.priceUsd,
+      change24hPct: sodex.change24hPct,
+      pairUrl: sodex.pairUrl,
+      source: "sodex",
       status: "LIVE",
     };
-  } catch {
-    return base;
   }
+  return base;
 }
 
 export async function evaluateSsiDrift(opts: {

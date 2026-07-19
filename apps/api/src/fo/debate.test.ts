@@ -3,6 +3,8 @@ import { test } from "node:test";
 import {
   buildActionPlan,
   buildDeterministicDebate,
+  buildHoldDebate,
+  classifyEvidenceGaps,
   evidenceKillReasons,
 } from "./debate.js";
 import type { LivingLoopResult } from "./living-loop.js";
@@ -63,8 +65,8 @@ test("buildActionPlan — BLOCK forces wait", () => {
   assert.match(policy!.detail, /BLOCK/);
 });
 
-test("evidenceKillReasons — on-chain UNAVAILABLE is a hard kill", () => {
-  const reasons = evidenceKillReasons(
+test("HOLD + soft UNAVAILABLE is not a hard kill", () => {
+  const gaps = classifyEvidenceGaps(
     mockLoop({
       citations: [
         { source: "etf", endpoint: "/etfs", at: "t", status: "LIVE" },
@@ -72,7 +74,26 @@ test("evidenceKillReasons — on-chain UNAVAILABLE is a hard kill", () => {
       ],
       drift: { action: "UNAVAILABLE", alert: false } as LivingLoopResult["drift"],
       proposal: {
-        title: "Hold MAG7",
+        action: "REVIEW_SSI_AND_SODEX",
+        title: "Hold MAG7 exposure; confirm SoDEX proxy liquidity before size",
+        onChainToken: { priceUsd: null, change24hPct: null },
+      },
+    }),
+  );
+  assert.equal(gaps.hard.length, 0);
+  assert.ok(gaps.soft.length > 0);
+});
+
+test("ALLOCATE + UNAVAILABLE is a hard kill", () => {
+  const reasons = evidenceKillReasons(
+    mockLoop({
+      citations: [
+        { source: "ssi_token", endpoint: "dexscreener", at: "t", status: "UNAVAILABLE" },
+      ],
+      drift: { action: "UNAVAILABLE", alert: true } as LivingLoopResult["drift"],
+      proposal: {
+        action: "SSI_DRIFT_ALLOCATE_OR_REBALANCE",
+        title: "ssiMAG7 drift — allocate",
         onChainToken: { priceUsd: null, change24hPct: null },
       },
     }),
@@ -80,14 +101,42 @@ test("evidenceKillReasons — on-chain UNAVAILABLE is a hard kill", () => {
   assert.ok(reasons.some((r) => /on-chain|drift/i.test(r)));
 });
 
-test("deterministic debate — WAIT never APPROVE on kill evidence", () => {
+test("hold debate — APPROVE hold, never INVALIDATE", () => {
   const loop = mockLoop({
     citations: [
       { source: "ssi_token", endpoint: "dexscreener", at: "t", status: "UNAVAILABLE" },
     ],
     drift: { action: "UNAVAILABLE", alert: false } as LivingLoopResult["drift"],
     proposal: {
+      action: "REVIEW_SSI_AND_SODEX",
       title: "Hold MAG7; confirm liquidity",
+      change24hPct: 1.07,
+      indexLevel: 11.49,
+      onChainToken: { priceUsd: null, change24hPct: null },
+    },
+    preflight: { verdict: "CAUTION", factors: [] },
+  });
+  const debate = buildHoldDebate(
+    loop,
+    ["on-chain SSI token quote UNAVAILABLE"],
+    { openTheses: 0, recentDecisions: 0 },
+    { maxNotionalUsd: 1 },
+    Date.now(),
+  );
+  assert.equal(debate.synthesis.stance, "approve");
+  assert.match(debate.counsel.content, /APPROVE/i);
+  assert.ok(!/INVALIDATE/i.test(debate.counsel.content));
+});
+
+test("deterministic debate — WAIT on hard size-up kill", () => {
+  const loop = mockLoop({
+    citations: [
+      { source: "ssi_token", endpoint: "dexscreener", at: "t", status: "UNAVAILABLE" },
+    ],
+    drift: { action: "UNAVAILABLE", alert: true } as LivingLoopResult["drift"],
+    proposal: {
+      action: "SSI_DRIFT_ALLOCATE_OR_REBALANCE",
+      title: "allocate now",
       onChainToken: { priceUsd: null, change24hPct: null },
     },
     preflight: { verdict: "CAUTION", factors: [] },
@@ -100,6 +149,4 @@ test("deterministic debate — WAIT never APPROVE on kill evidence", () => {
   );
   assert.equal(debate.synthesis.stance, "wait");
   assert.match(debate.counsel.content, /WAIT/i);
-  assert.match(debate.falsifier.content, /INVALIDATE|UNAVAILABLE/i);
-  assert.ok(!/Counsel recommends: APPROVE/i.test(debate.counsel.content));
 });

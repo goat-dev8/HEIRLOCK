@@ -101,6 +101,15 @@ export function MobileNavTrigger() {
           <nav className="px-3 py-4">
             <NavLinks pathname={pathname} onNavigate={() => setOpen(false)} />
           </nav>
+          <div className="border-t border-border/40 px-5 py-4">
+            <Link
+              to="/app/contracts"
+              onClick={() => setOpen(false)}
+              className="block text-xs text-muted-foreground hover:text-foreground"
+            >
+              ValueChain contracts
+            </Link>
+          </div>
         </SheetContent>
       </Sheet>
     </>
@@ -143,8 +152,14 @@ export function AppSidebar() {
           Official SoDEX
         </a>
         <Link
+          to="/app/contracts"
+          className="mt-3 block text-xs text-muted-foreground hover:text-foreground"
+        >
+          ValueChain contracts
+        </Link>
+        <Link
           to="/status"
-          className="mt-3 block text-[11px] text-muted-foreground/70 hover:text-foreground"
+          className="mt-1.5 block text-[11px] text-muted-foreground/70 hover:text-foreground"
         >
           System status
         </Link>
