@@ -133,9 +133,14 @@ export async function signAndPlaceSpotOrder(input: {
     nonce,
   });
 
+  const chainId =
+    input.environment === "testnet"
+      ? input.env.SODEX_TESTNET_CHAIN_ID
+      : input.env.SODEX_MAINNET_CHAIN_ID;
   const headers = buildRelayHeaders({
     apiSign: signed.apiSign,
     nonce: signed.nonce,
+    chainId,
   });
 
   const result = await input.sodex.placeOrders(
@@ -187,6 +192,10 @@ export async function signAndCancelSpotOrder(input: {
   const headers = buildRelayHeaders({
     apiSign: signed.apiSign,
     nonce: signed.nonce,
+    chainId:
+      input.environment === "testnet"
+        ? input.env.SODEX_TESTNET_CHAIN_ID
+        : input.env.SODEX_MAINNET_CHAIN_ID,
   });
   const result = await input.sodex.cancelOrders(
     input.environment,
@@ -329,6 +338,10 @@ export async function signAndPlacePerpsOrder(input: {
   const headers = buildRelayHeaders({
     apiSign: signed.apiSign,
     nonce: signed.nonce,
+    chainId:
+      input.environment === "testnet"
+        ? input.env.SODEX_TESTNET_CHAIN_ID
+        : input.env.SODEX_MAINNET_CHAIN_ID,
   });
 
   const result = await input.sodex.placePerpsOrders(
@@ -384,6 +397,10 @@ export async function signAndCancelPerpsOrder(input: {
   const headers = buildRelayHeaders({
     apiSign: signed.apiSign,
     nonce: signed.nonce,
+    chainId:
+      input.environment === "testnet"
+        ? input.env.SODEX_TESTNET_CHAIN_ID
+        : input.env.SODEX_MAINNET_CHAIN_ID,
   });
   const result = await input.sodex.cancelPerpsOrders(
     input.environment,

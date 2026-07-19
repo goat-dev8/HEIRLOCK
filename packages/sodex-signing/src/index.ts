@@ -134,9 +134,9 @@ export function buildSpotBatchOrderItem(input: {
   item.side = input.side;
   item.type = input.type;
   item.timeInForce = input.timeInForce;
-  if (input.price !== undefined) item.price = input.price;
-  if (input.quantity !== undefined) item.quantity = input.quantity;
-  if (input.funds !== undefined) item.funds = input.funds;
+  if (input.price !== undefined) item.price = stripTrailingZeros(input.price);
+  if (input.quantity !== undefined) item.quantity = stripTrailingZeros(input.quantity);
+  if (input.funds !== undefined) item.funds = stripTrailingZeros(input.funds);
   return item;
 }
 
@@ -212,10 +212,10 @@ export function buildPerpsOrderItem(input: {
   item.side = input.side;
   item.type = input.type;
   item.timeInForce = input.timeInForce;
-  if (input.price !== undefined) item.price = input.price;
-  if (input.quantity !== undefined) item.quantity = input.quantity;
-  if (input.funds !== undefined) item.funds = input.funds;
-  if (input.stopPrice !== undefined) item.stopPrice = input.stopPrice;
+  if (input.price !== undefined) item.price = stripTrailingZeros(input.price);
+  if (input.quantity !== undefined) item.quantity = stripTrailingZeros(input.quantity);
+  if (input.funds !== undefined) item.funds = stripTrailingZeros(input.funds);
+  if (input.stopPrice !== undefined) item.stopPrice = stripTrailingZeros(input.stopPrice);
   if (input.stopType !== undefined) item.stopType = input.stopType;
   if (input.triggerType !== undefined) item.triggerType = input.triggerType;
   item.reduceOnly = input.reduceOnly;
@@ -382,9 +382,19 @@ export function perpsCancelItemKeyOrder(): string[] {
   return ["symbolID", "orderID", "clOrdID"];
 }
 
+/** SoDEX rejects padded decimals (use "0.45" not "0.4500"). */
+export function stripTrailingZeros(decimal: string): string {
+  const t = String(decimal).trim();
+  if (!t.includes(".")) return t;
+  const stripped = t.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+  return stripped === "" || stripped === "-" ? "0" : stripped;
+}
+
 export function buildRelayHeaders(input: {
   apiSign: Hex;
   nonce: bigint;
+  /** Required by SoDEX gateway — must match EIP-712 domain.chainId */
+  chainId: number;
   apiKeyName?: string;
 }): Record<string, string> {
   const headers: Record<string, string> = {
@@ -392,6 +402,7 @@ export function buildRelayHeaders(input: {
     Accept: "application/json",
     "X-API-Sign": input.apiSign,
     "X-API-Nonce": input.nonce.toString(),
+    "X-API-Chain": String(input.chainId),
   };
   if (input.apiKeyName) headers["X-API-Key"] = input.apiKeyName;
   return headers;

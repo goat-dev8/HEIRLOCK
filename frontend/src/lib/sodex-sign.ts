@@ -1,4 +1,5 @@
 import { keccak256, stringToBytes, type Hex } from "viem";
+import { env } from "@/lib/env";
 
 export const SODEX_CHAIN_IDS = {
   mainnet: 286623,
@@ -44,6 +45,61 @@ export function toTypedApiSign(signature: Hex): Hex {
   if (v >= 27) v -= 27;
   if (v !== 0 && v !== 1) throw new Error(`Invalid recovery id v=${v}`);
   return `0x01${r}${s}${v.toString(16).padStart(2, "0")}` as Hex;
+}
+
+/** Switch / add ValueChain so MetaMask shows the EIP-712 popup on the correct network. */
+export async function ensureValueChain(targetChainId: number): Promise<void> {
+  const eth = (window as unknown as { ethereum?: { request: (args: unknown) => Promise<unknown> } })
+    .ethereum;
+  if (!eth?.request) return;
+
+  const currentHex = (await eth.request({ method: "eth_chainId" })) as string;
+  const current = Number.parseInt(currentHex, 16);
+  if (current === targetChainId) return;
+
+  const targetHex = `0x${targetChainId.toString(16)}`;
+  const isTestnet = targetChainId === SODEX_CHAIN_IDS.testnet;
+  const rpc = isTestnet ? env.VALUECHAIN.testnet.rpc : env.VALUECHAIN.mainnet.rpc;
+  const explorer = isTestnet ? env.VALUECHAIN.testnet.explorer : env.VALUECHAIN.mainnet.explorer;
+
+  try {
+    await eth.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: targetHex }],
+    });
+  } catch (switchErr: unknown) {
+    const code = (switchErr as { code?: number })?.code;
+    if (code === 4902 || code === -32603) {
+      await eth.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: targetHex,
+            chainName: isTestnet ? "ValueChain Testnet" : "ValueChain",
+            nativeCurrency: { name: "SOSO", symbol: "SOSO", decimals: 18 },
+            rpcUrls: [rpc],
+            blockExplorerUrls: [explorer],
+          },
+        ],
+      });
+      await eth.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: targetHex }],
+      });
+    } else {
+      throw new Error(
+        `Switch wallet to ValueChain ${isTestnet ? "Testnet" : "Mainnet"} (chain ${targetChainId}) and retry.`,
+      );
+    }
+  }
+}
+
+/** Strip trailing zeros — SoDEX rejects "0.4500". */
+export function stripTrailingZeros(decimal: string): string {
+  const t = String(decimal).trim();
+  if (!t.includes(".")) return t;
+  const stripped = t.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+  return stripped === "" || stripped === "-" ? "0" : stripped;
 }
 
 export function unwrapArray(input: unknown): unknown[] {

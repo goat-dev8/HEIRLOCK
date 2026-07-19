@@ -80,8 +80,10 @@ test("signExchangeAction produces apiSign for master-wallet path", async () => {
   const headers = buildRelayHeaders({
     apiSign: signed.apiSign,
     nonce: signed.nonce,
+    chainId: 286623,
   });
   assert.equal(headers["X-API-Sign"], signed.apiSign);
+  assert.equal(headers["X-API-Chain"], "286623");
   assert.equal(headers["X-API-Key"], undefined);
 });
 

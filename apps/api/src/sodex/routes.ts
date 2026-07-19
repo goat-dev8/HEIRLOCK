@@ -23,6 +23,10 @@ import {
   recordCancelOnly,
   recordLiveMatcherOk,
 } from "./capability.js";
+import {
+  assertWalletSignedExchange,
+  buildUnsignedTypedData,
+} from "./verify-sign.js";
 
 const envSchema = z.enum(["mainnet", "testnet"]);
 
@@ -367,11 +371,22 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
     }
 
     const nonce = await nextSodexNonce(wallet);
+    const draft = buildUnsignedTypedData({
+      market: parsed.data.market,
+      environment: parsed.data.environment,
+      actionType: prepared.actionType,
+      params: prepared.params,
+      nonce,
+    });
     return {
       ...prepared,
-      suggestedNonce: nonce.toString(),
+      suggestedNonce: draft.nonce,
+      payloadHash: draft.payloadHash,
+      chainId: draft.chainId,
+      typedData: draft.typedData,
+      status: "UNSIGNED",
       signHint:
-        "EIP-712 ExchangeAction{payloadHash,nonce} under domain spot/futures; prepend 0x01 to sig",
+        "Switch wallet to ValueChain, eth_signTypedData_v4 typedData, prepend 0x01, POST /orders/place",
     };
   });
 
@@ -403,6 +418,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         params: z.unknown(),
         apiSign: z.string().regex(/^0x01[0-9a-fA-F]{130}$/),
         apiNonce: z.string().min(1),
+        payloadHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/).optional(),
         apiKeyName: z.string().optional(),
         notionalUsd: z.number().optional(),
         market: z.enum(["spot", "perps"]).default("spot"),
@@ -445,6 +461,26 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
     }
 
     const market = parsed.data.market;
+    const actionType = market === "perps" ? "newOrder" : "batchNewOrder";
+
+    let verified: Awaited<ReturnType<typeof assertWalletSignedExchange>>;
+    try {
+      verified = await assertWalletSignedExchange({
+        wallet,
+        market,
+        environment: parsed.data.environment,
+        actionType,
+        params: parsed.data.params,
+        apiSign: parsed.data.apiSign,
+        apiNonce: parsed.data.apiNonce,
+        payloadHash: parsed.data.payloadHash,
+      });
+    } catch (e) {
+      return reply.code(401).send({
+        error: e instanceof Error ? e.message : "sig_verify_failed",
+      });
+    }
+
     const order = await prisma.signedOrder.create({
       data: {
         userId: account.userId,
@@ -453,10 +489,10 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
         accountId: account.accountId,
         market,
         side: parsed.data.side ?? "unknown",
-        orderType: market === "perps" ? "newOrder" : "batchNewOrder",
+        orderType: actionType,
         notionalUsd: notionalUsd != null ? notionalUsd : undefined,
         payloadJson: parsed.data.params as object,
-        signature: parsed.data.apiSign,
+        signature: verified.wireApiSign,
         status: "submitted",
         proofUrl: ctx.sodex.portfolioUrl(parsed.data.environment),
       },
@@ -472,7 +508,7 @@ export async function registerSodexRoutes(app: FastifyInstance, ctx: AppContext)
 
     try {
       const relayOpts = {
-        apiSign: parsed.data.apiSign,
+        apiSign: verified.wireApiSign,
         apiNonce: parsed.data.apiNonce,
         apiKeyName: parsed.data.apiKeyName,
       };

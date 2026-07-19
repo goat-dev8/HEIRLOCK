@@ -246,6 +246,7 @@ async function main() {
   const headers = buildRelayHeaders({
     apiSign: signed.apiSign,
     nonce: signed.nonce,
+    chainId: env.SODEX_TESTNET_CHAIN_ID,
   });
 
   const transferResult = await sodex.transferAsset(environment, params, {

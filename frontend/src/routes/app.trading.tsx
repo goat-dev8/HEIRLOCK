@@ -19,9 +19,10 @@ import { useAccount, useSignTypedData } from "wagmi";
 import { env } from "@/lib/env";
 import type { Hex } from "viem";
 import {
-  buildExchangeDomain,
-  computePayloadHash,
+  SODEX_CHAIN_IDS,
+  ensureValueChain,
   exchangeActionTypes,
+  stripTrailingZeros,
   toTypedApiSign,
 } from "@/lib/sodex-sign";
 import { clearPartnerDecisionId, readPartnerDecisionId } from "@/lib/partner-handoff";
@@ -314,19 +315,12 @@ function OrderTicket({
     }
     setSize("");
   }, [symbol, lastPrice]);
-  const [preparing, setPreparing] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [proof, setProof] = useState<{
     orderId?: string;
     sodexOrderId?: string;
     relayId?: string;
     portfolioUrl: string;
-  } | null>(null);
-  const [prepared, setPrepared] = useState<{
-    params: unknown;
-    actionType: string;
-    suggestedNonce: string;
-    notionalUsd: number;
   } | null>(null);
   const { address } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
@@ -340,21 +334,32 @@ function OrderTicket({
 
   const overCap = network === "mainnet" && notional > cap;
 
-  async function prepare() {
+  /** One click: prepare → switch ValueChain → wallet popup → relay to SoDEX. */
+  async function signAndPlace() {
     if (!symbol || !address || !symbolID) {
       toast.error("Select a market first");
       return;
     }
-    setPreparing(true);
-    setPrepared(null);
+    setPlacing(true);
+    setProof(null);
+    const linkedDecisionId = decisionId || readPartnerDecisionId() || undefined;
     try {
-      const res = await api<{
+      const px = stripTrailingZeros(price);
+      const qty = stripTrailingZeros(size);
+      const prepared = await api<{
         ok?: boolean;
         reason?: string;
         params?: unknown;
         actionType?: string;
-        suggestedNonce?: string | number;
-        effectiveCapUsd?: number;
+        suggestedNonce?: string;
+        payloadHash?: Hex;
+        chainId?: number;
+        typedData?: {
+          domain: Record<string, unknown>;
+          types: typeof exchangeActionTypes;
+          primaryType: "ExchangeAction";
+          message: { payloadHash: Hex; nonce: string };
+        };
       }>("/api/sodex/orders/prepare", {
         method: "POST",
         auth: true,
@@ -365,46 +370,39 @@ function OrderTicket({
           side: side === "buy" ? 1 : 2,
           type: 1,
           timeInForce: 1,
-          price,
-          quantity: size,
+          price: px,
+          quantity: qty,
           notionalUsd: notional,
         },
       });
-      if (res.ok === false) {
-        throw new Error(res.reason || "Policy blocked");
+      if (prepared.ok === false) {
+        throw new Error(prepared.reason || "Policy blocked");
       }
-      if (!res.params || !res.actionType) {
-        throw new Error("Prepare response missing params/actionType");
+      if (!prepared.params || !prepared.typedData || !prepared.payloadHash) {
+        throw new Error("Prepare missing typedData — refresh and retry");
       }
-      setPrepared({
-        params: res.params,
-        actionType: res.actionType,
-        suggestedNonce: String(res.suggestedNonce ?? Date.now()),
-        notionalUsd: notional,
-      });
-      toast.success("Order ready — sign in your wallet to place.");
-    } catch (e) {
-      toast.error((e as Error).message || "Prepare failed");
-    } finally {
-      setPreparing(false);
-    }
-  }
 
-  async function signAndPlace() {
-    if (!prepared || !address) return;
-    setPlacing(true);
-    const linkedDecisionId = decisionId || readPartnerDecisionId() || undefined;
-    try {
-      const nonce = BigInt(prepared.suggestedNonce);
-      const payloadHash = computePayloadHash(prepared.actionType, prepared.params);
-      const domain = buildExchangeDomain(market, network);
+      const chainId = prepared.chainId ?? SODEX_CHAIN_IDS[network];
+      toast.message("Confirm ValueChain in your wallet…");
+      await ensureValueChain(chainId);
+
+      toast.message("Sign the SoDEX order in your wallet…");
       const rawSig = (await signTypedDataAsync({
-        domain,
+        domain: prepared.typedData.domain as {
+          name: string;
+          version: string;
+          chainId: number;
+          verifyingContract: `0x${string}`;
+        },
         types: exchangeActionTypes,
         primaryType: "ExchangeAction",
-        message: { payloadHash, nonce },
+        message: {
+          payloadHash: prepared.typedData.message.payloadHash,
+          nonce: BigInt(prepared.typedData.message.nonce),
+        },
       })) as Hex;
       const apiSign = toTypedApiSign(rawSig);
+
       const res = await api<{
         orderId?: string;
         sodexOrderId?: string;
@@ -413,22 +411,32 @@ function OrderTicket({
         id?: string;
         status?: string;
         fillProof?: { note?: string; tradeIds?: string[]; status?: string };
+        error?: string;
       }>("/api/sodex/orders/place", {
-          method: "POST",
-          auth: true,
-          body: {
-            environment: network,
-            market,
-            params: prepared.params,
-            apiSign,
-            apiNonce: prepared.suggestedNonce,
-            notionalUsd: prepared.notionalUsd,
-            side,
-            ...(linkedDecisionId ? { decisionId: linkedDecisionId } : {}),
-          },
-        });
-      const sodexOrderId = res.sodexOrderId ?? res.orderId;
-      const relayId = res.relayId ?? res.id;
+        method: "POST",
+        auth: true,
+        body: {
+          environment: network,
+          market,
+          params: prepared.params,
+          apiSign,
+          apiNonce: String(prepared.suggestedNonce ?? prepared.typedData.message.nonce),
+          payloadHash: prepared.payloadHash,
+          notionalUsd: notional,
+          side,
+          ...(linkedDecisionId ? { decisionId: linkedDecisionId } : {}),
+        },
+      });
+      if (res.error) throw new Error(res.error);
+
+      const sodexOrderId = res.sodexOrderId ?? undefined;
+      const relayId = res.relayId ?? res.id ?? res.orderId;
+      if (!sodexOrderId && res.status !== "filled" && res.status !== "partial") {
+        toast.message(
+          res.fillProof?.note ??
+            "Relay accepted — open SoDEX Portfolio to confirm history indexing",
+        );
+      }
       setProof({
         orderId: res.orderId,
         sodexOrderId,
@@ -444,7 +452,7 @@ function OrderTicket({
           });
           clearPartnerDecisionId();
         } catch {
-          /* link-order best-effort — place already may have linked */
+          /* best-effort */
         }
       }
       try {
@@ -472,16 +480,17 @@ function OrderTicket({
         );
       } else if (res.status === "partial") {
         toast.success(`Partial fill verified${sodexOrderId ? ` · ${sodexOrderId}` : ""}`);
-      } else {
-        toast.message(
-          res.fillProof?.note ??
-            `Submitted${sodexOrderId ? ` · ${sodexOrderId}` : ""} — awaiting fill evidence`,
-        );
+      } else if (sodexOrderId) {
+        toast.success(`Order live on SoDEX · ${sodexOrderId}`);
       }
-      setPrepared(null);
       setSize("");
     } catch (e) {
-      toast.error((e as Error).message || "Place failed");
+      const msg = (e as Error).message || "Place failed";
+      if (/user rejected|denied|4001/i.test(msg)) {
+        toast.error("Signature rejected in wallet — order not sent");
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setPlacing(false);
     }
@@ -545,24 +554,17 @@ function OrderTicket({
           </div>
         )}
 
-        {!prepared ? (
-          <Button
-            className="w-full"
-            onClick={prepare}
-            disabled={preparing || overCap || !symbol || !symbolID || !price || !size}
-          >
-            {preparing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Prepare order
-          </Button>
-        ) : (
-          <Button className="w-full" onClick={signAndPlace} disabled={placing}>
-            {placing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Sign & place
-          </Button>
-        )}
+        <Button
+          className="w-full"
+          onClick={signAndPlace}
+          disabled={placing || overCap || !symbol || !symbolID || !price || !size || !address}
+        >
+          {placing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Sign & place on SoDEX
+        </Button>
 
         <div className="pt-1 text-sm text-muted-foreground">
-          Signed in your wallet · non-custodial · under policy
+          Your wallet signs EIP-712 on ValueChain · HEIRLOCK never holds keys · order lands on SoDEX history
         </div>
       
 

@@ -53,17 +53,8 @@ export function evaluateTradePolicy(
     return { ok: false, reason: "KILL_SWITCH_TRADING=true", effectiveCapUsd };
   }
 
-  // Testnet: SoDEX Enable Trading + verified aid is the gate — do not block on
-  // TRADING_ALLOWLIST (launch rail is mainnet-only). Empty allowlist = open on mainnet.
-  if (environment !== "testnet") {
-    const allow = env.TRADING_ALLOWLIST.split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
-    const wallet = input.wallet.toLowerCase();
-    if (allow.length && !allow.includes(wallet)) {
-      return { ok: false, reason: "wallet_not_allowlisted", effectiveCapUsd };
-    }
-  }
+  // Multi-user: any SIWE wallet with verified SoDEX aid may trade.
+  // TRADING_ALLOWLIST is no longer a hard gate (kept in env for ops visibility only).
 
   if (input.notionalUsd != null && input.notionalUsd > effectiveCapUsd) {
     return {
@@ -105,7 +96,11 @@ export function applyOnChainContinuityGate(
     return { ...decision, onChain };
   }
 
+  // Unavailable RPC must not brick testnet trading; mainnet still requires live policy.
   if (onChain.source === "unavailable") {
+    if (opts?.applyOnChainNotionalCap === false) {
+      return { ...decision, onChain };
+    }
     return {
       ok: false,
       reason: "on_chain_wealth_policy_unavailable",

@@ -31,8 +31,8 @@ export type RelayOpts = {
 
 /**
  * SoDEX REST client — official paths use {userAddress}, not accountId-as-path.
- * Writes require X-API-Sign + X-API-Nonce; omit X-API-Key for master-wallet signing.
- * Source: https://sodex.com/documentation/trading-api/rest-v1/sodex-rest-spot-api
+ * Writes require X-API-Sign + X-API-Nonce + X-API-Chain; omit X-API-Key for master-wallet signing.
+ * Source: https://sodex.com/documentation/trading-api/trading-api
  */
 export class SodexClient {
   constructor(private readonly env: Env) {}
@@ -327,11 +327,13 @@ export class SodexClient {
     }
     const base = market === "spot" ? this.spot(environment) : this.perps(environment);
     const url = `${base}${path}`;
+    const chainId = this.gateways(environment).chainId;
     const headers: Record<string, string> = {
       "content-type": "application/json",
       accept: "application/json",
       "X-API-Sign": opts.apiSign,
       "X-API-Nonce": opts.apiNonce,
+      "X-API-Chain": String(chainId),
     };
     if (opts.apiKeyName) headers["X-API-Key"] = opts.apiKeyName;
 

@@ -65,22 +65,7 @@ test("testnet allows large notional", () => {
   assert.equal(effectiveNotionalCapUsd(env, "mainnet") <= 1, true);
 });
 
-test("testnet ignores TRADING_ALLOWLIST (SoDEX aid is the gate)", () => {
-  const env = {
-    ...loadEnv(),
-    KILL_SWITCH_TRADING: false,
-    TRADING_ENABLED: true,
-    TRADING_ALLOWLIST: "0xf76e6b0920e9332ff4410f6dd53f01722abc71a3",
-  };
-  const d = evaluateTradePolicy(env, {
-    wallet: "0x0103000000000000000000000000000000001337",
-    notionalUsd: 11.25,
-    environment: "testnet",
-  });
-  assert.equal(d.ok, true);
-});
-
-test("mainnet still enforces TRADING_ALLOWLIST when set", () => {
+test("any verified wallet can trade on testnet and mainnet (allowlist not a hard gate)", () => {
   const env = {
     ...loadEnv(),
     KILL_SWITCH_TRADING: false,
@@ -89,11 +74,16 @@ test("mainnet still enforces TRADING_ALLOWLIST when set", () => {
     TRADING_MAX_NOTIONAL_USD: 1,
     MAINNET_TEST_MAX_NOTIONAL_USD: 1,
   };
-  const blocked = evaluateTradePolicy(env, {
+  const testnet = evaluateTradePolicy(env, {
+    wallet: "0x0103000000000000000000000000000000001337",
+    notionalUsd: 11.25,
+    environment: "testnet",
+  });
+  const mainnet = evaluateTradePolicy(env, {
     wallet: "0x0103000000000000000000000000000000001337",
     notionalUsd: 0.5,
     environment: "mainnet",
   });
-  assert.equal(blocked.ok, false);
-  if (!blocked.ok) assert.equal(blocked.reason, "wallet_not_allowlisted");
+  assert.equal(testnet.ok, true);
+  assert.equal(mainnet.ok, true);
 });
