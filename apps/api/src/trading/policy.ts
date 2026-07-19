@@ -53,12 +53,16 @@ export function evaluateTradePolicy(
     return { ok: false, reason: "KILL_SWITCH_TRADING=true", effectiveCapUsd };
   }
 
-  const allow = env.TRADING_ALLOWLIST.split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  const wallet = input.wallet.toLowerCase();
-  if (allow.length && !allow.includes(wallet)) {
-    return { ok: false, reason: "wallet_not_allowlisted", effectiveCapUsd };
+  // Testnet: SoDEX Enable Trading + verified aid is the gate — do not block on
+  // TRADING_ALLOWLIST (launch rail is mainnet-only). Empty allowlist = open on mainnet.
+  if (environment !== "testnet") {
+    const allow = env.TRADING_ALLOWLIST.split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const wallet = input.wallet.toLowerCase();
+    if (allow.length && !allow.includes(wallet)) {
+      return { ok: false, reason: "wallet_not_allowlisted", effectiveCapUsd };
+    }
   }
 
   if (input.notionalUsd != null && input.notionalUsd > effectiveCapUsd) {

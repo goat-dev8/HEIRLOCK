@@ -155,11 +155,48 @@ function parseModeratorStance(text: string): DebateResult["synthesis"]["stance"]
   return m[1]!.toLowerCase() as DebateResult["synthesis"]["stance"];
 }
 
+/** Hard kill conditions that must force WAIT — never APPROVE size. */
+export function evidenceKillReasons(loop: LivingLoopResult): string[] {
+  const reasons: string[] = [];
+  if (loop.preflight.verdict === "BLOCK") {
+    reasons.push("preflight BLOCK");
+  }
+  const ssiToken = loop.citations.find((c) => c.source === "ssi_token");
+  if (ssiToken?.status === "UNAVAILABLE") {
+    reasons.push("on-chain SSI token quote UNAVAILABLE");
+  }
+  if (loop.drift?.action === "UNAVAILABLE") {
+    reasons.push("dual-source SSI drift UNAVAILABLE");
+  }
+  const onChain = loop.proposal?.onChainToken as
+    | { priceUsd?: number | null; change24hPct?: number | null }
+    | null
+    | undefined;
+  if (onChain && onChain.priceUsd == null && onChain.change24hPct == null) {
+    if (!reasons.some((r) => r.includes("on-chain"))) {
+      reasons.push("on-chain token price UNAVAILABLE");
+    }
+  }
+  if (loop.preflight.verdict === "CAUTION" && reasons.length > 0) {
+    // CAUTION alone is soft; CAUTION + missing on-chain is hard
+  }
+  return reasons;
+}
+
 function fallbackSynthesize(
   counsel: string,
   falsifier: string,
   loop: LivingLoopResult,
 ): DebateResult["synthesis"] {
+  const kills = evidenceKillReasons(loop);
+  if (kills.length > 0) {
+    return {
+      stance: "wait",
+      confidence: 88,
+      summary: `Evidence incomplete (${kills.join("; ")}) — WAIT before Approve.`,
+    };
+  }
+
   const c = counsel.toLowerCase();
   const f = falsifier.toLowerCase();
   const falsifierStrong =
@@ -201,6 +238,68 @@ function fallbackSynthesize(
   };
 }
 
+function applyEvidenceOverrides(
+  synthesis: DebateResult["synthesis"],
+  loop: LivingLoopResult,
+): DebateResult["synthesis"] {
+  const kills = evidenceKillReasons(loop);
+  if (loop.preflight.verdict === "BLOCK") {
+    return {
+      stance: "wait",
+      confidence: 90,
+      summary: "Moderator overridden: WealthPolicy preflight BLOCK — wait.",
+    };
+  }
+  if (kills.length > 0 && synthesis.stance === "approve") {
+    return {
+      stance: "wait",
+      confidence: 90,
+      summary: `Moderator overridden: cannot APPROVE while ${kills.join("; ")}.`,
+    };
+  }
+  return synthesis;
+}
+
+/** Instant debate when evidence already has hard kill conditions — no 3× LLM round-trip. */
+export function buildDeterministicDebate(
+  loop: LivingLoopResult,
+  memoryUsed: { openTheses: number; recentDecisions: number },
+  env: { ssiAppUrl?: string; maxNotionalUsd?: number },
+  started: number,
+): DebateResult {
+  const kills = evidenceKillReasons(loop);
+  const killLine = kills.join("; ") || "incomplete evidence";
+  const counsel: DebateSide = {
+    role: "counsel",
+    content: `Cannot defend size increase: ${killLine}. Terminal index alone is not enough when the proposal requires proxy liquidity confirmation. Counsel recommends: WAIT — restore LIVE on-chain quotes and verified SoDEX aid before Approve.`,
+  };
+  const falsifier: DebateSide = {
+    role: "falsifier",
+    content: `Kill conditions hit: ${killLine}. Without LIVE on-chain token data, SoDEX proxy liquidity cannot be confirmed — the proposal's own precondition fails. Falsifier recommends: INVALIDATE — do not Approve until dual-source evidence is LIVE.`,
+  };
+  const synthesis: DebateResult["synthesis"] = {
+    stance: "wait",
+    confidence: 92,
+    summary: `Evidence incomplete (${killLine}). Hold exposure; re-run after on-chain quotes recover.`,
+  };
+  const moderator: DebateSide = {
+    role: "moderator",
+    content: `${synthesis.summary}\nFINAL: WAIT`,
+  };
+  return {
+    status: "LIVE",
+    proposalTitle: String(loop.proposal.title ?? ""),
+    counsel,
+    falsifier,
+    moderator,
+    synthesis,
+    actionPlan: buildActionPlan(loop, synthesis, env),
+    citations: loop.citations,
+    memoryUsed,
+    latencyMs: Date.now() - started,
+  };
+}
+
 export async function runMemoryDebate(
   ctx: AppContext,
   wallet: string,
@@ -212,6 +311,38 @@ export async function runMemoryDebate(
     memory.listDecisions(wallet, 8),
   ]);
   const open = theses.filter((t) => t.status === "active" || t.status === "challenged");
+  const memoryUsed = { openTheses: open.length, recentDecisions: decisions.length };
+  const maxNotional = Math.min(ctx.env.TRADING_MAX_NOTIONAL_USD, ctx.env.MAINNET_TEST_MAX_NOTIONAL_USD);
+  const planEnv = { ssiAppUrl: ctx.env.SSI_APP_URL, maxNotionalUsd: maxNotional };
+
+  // Fast path: hard kill evidence → skip 3 LLM calls (seconds → ms)
+  const kills = evidenceKillReasons(loop);
+  if (kills.length > 0) {
+    const fast = buildDeterministicDebate(loop, memoryUsed, planEnv, started);
+    try {
+      const profile = await prisma.userProfile.findUnique({
+        where: { walletAddress: wallet.toLowerCase() },
+      });
+      await prisma.agentLog.create({
+        data: {
+          userId: profile?.id,
+          provider: "deterministic",
+          model: "evidence-kill",
+          event: "fo.partner.debate",
+          detail: JSON.stringify({
+            proposal: loop.proposal.title,
+            path: "deterministic",
+            kills,
+            synthesis: fast.synthesis,
+          }),
+          latencyMs: fast.latencyMs,
+        },
+      });
+    } catch {
+      /* non-fatal */
+    }
+    return fast;
+  }
 
   const evidenceBlock = `LIVE_EVIDENCE (authoritative — never invent numbers beyond this):
 Proposal: ${JSON.stringify(loop.proposal).slice(0, 1000)}
@@ -224,14 +355,13 @@ Recent choices: ${decisions
     .join(", ") || "(none)"}`;
 
   const counselSystem = `You are COUNSEL for HEIRLOCK's Living Investment Partner.
-Defend the current proposal using ONLY LIVE_EVIDENCE and MEMORY below.
-Rules: never invent prices, AUM, or addresses. If a fact is UNAVAILABLE, say so.
-Be concise (≤120 words). End with: "Counsel recommends: APPROVE|WAIT" and why.`;
+Defend the proposal ONLY with LIVE_EVIDENCE. Never invent prices, AUM, or addresses.
+HARD RULE: if any critical citation is UNAVAILABLE, on-chain price is null, or drift action is UNAVAILABLE, you MUST recommend WAIT (never APPROVE).
+Be concise (≤90 words). End with: "Counsel recommends: APPROVE|WAIT" and why.`;
 
   const falsifierSystem = `You are the FALSIFIER for HEIRLOCK's Living Investment Partner.
-Your job is to KILL the proposal if evidence allows — find kill conditions.
-Rules: never invent prices, AUM, or addresses. Prefer drift alerts, UNAVAILABLE sources, BLOCK preflight, and thesis contradictions.
-Be concise (≤120 words). End with: "Falsifier recommends: CHALLENGE|WAIT|INVALIDATE" and why.`;
+Kill the proposal when evidence allows. Prefer: drift alerts, UNAVAILABLE sources, null on-chain price, BLOCK/CAUTION preflight, thesis contradictions.
+Never invent prices. Be concise (≤90 words). End with: "Falsifier recommends: CHALLENGE|WAIT|INVALIDATE" and why.`;
 
   const userMsg = `Debate the proposal: "${String(loop.proposal.title ?? "current proposal")}".\n\n${evidenceBlock}`;
 
@@ -247,8 +377,8 @@ Be concise (≤120 words). End with: "Falsifier recommends: CHALLENGE|WAIT|INVAL
           { role: "user", content: user },
         ],
         thinking: false,
-        maxTokens: 320,
-        temperature: 0.2,
+        maxTokens: 200,
+        temperature: 0.15,
       });
       return {
         role,
@@ -271,13 +401,8 @@ Be concise (≤120 words). End with: "Falsifier recommends: CHALLENGE|WAIT|INVAL
   ]);
 
   const moderatorSystem = `You are the MODERATOR for HEIRLOCK's Living Investment Partner.
-You receive Counsel and Falsifier arguments plus LIVE_EVIDENCE.
-Rules:
-- Never invent numbers.
-- Prefer Falsifier when kill conditions are evidence-backed.
-- Prefer WAIT when sides disagree without a clear evidence winner.
-- Prefer APPROVE only when Counsel is evidence-backed AND Falsifier fails to hit a kill condition AND preflight is not BLOCK.
-Output ≤100 words. End EXACTLY with one line: FINAL: APPROVE|CHALLENGE|WAIT`;
+Rules: never invent numbers. Prefer Falsifier on evidence-backed kills. Prefer WAIT on disagreement or UNAVAILABLE critical data. APPROVE only when Counsel is evidence-backed, Falsifier fails a kill, and preflight is not BLOCK/CAUTION with missing on-chain data.
+Output ≤80 words. End EXACTLY with: FINAL: APPROVE|CHALLENGE|WAIT`;
 
   const moderatorUser = `${evidenceBlock}
 
@@ -292,25 +417,19 @@ Issue the final recommendation.`;
   const moderator = await side("moderator", moderatorSystem, moderatorUser);
   const parsed = parseModeratorStance(moderator.content);
   const fallback = fallbackSynthesize(counsel.content, falsifier.content, loop);
-  const synthesis: DebateResult["synthesis"] = parsed
+  let synthesis: DebateResult["synthesis"] = parsed
     ? {
         stance: parsed,
         confidence: parsed === fallback.stance ? Math.max(fallback.confidence, 70) : 62,
-        summary: moderator.content.replace(/\n?FINAL:\s*(APPROVE|CHALLENGE|WAIT)\s*$/i, "").trim() || fallback.summary,
+        summary:
+          moderator.content.replace(/\n?FINAL:\s*(APPROVE|CHALLENGE|WAIT)\s*$/i, "").trim() ||
+          fallback.summary,
       }
     : fallback;
 
-  if (loop.preflight.verdict === "BLOCK") {
-    synthesis.stance = "wait";
-    synthesis.confidence = 90;
-    synthesis.summary = "Moderator overridden: WealthPolicy preflight BLOCK — wait.";
-  }
+  synthesis = applyEvidenceOverrides(synthesis, loop);
 
-  const maxNotional = Math.min(ctx.env.TRADING_MAX_NOTIONAL_USD, ctx.env.MAINNET_TEST_MAX_NOTIONAL_USD);
-  const actionPlan = buildActionPlan(loop, synthesis, {
-    ssiAppUrl: ctx.env.SSI_APP_URL,
-    maxNotionalUsd: maxNotional,
-  });
+  const actionPlan = buildActionPlan(loop, synthesis, planEnv);
 
   const degraded =
     counsel.content.startsWith("UNAVAILABLE") ||
@@ -329,6 +448,7 @@ Issue the final recommendation.`;
         event: "fo.partner.debate",
         detail: JSON.stringify({
           proposal: loop.proposal.title,
+          path: "llm",
           synthesis,
           counselPreview: counsel.content.slice(0, 300),
           falsifierPreview: falsifier.content.slice(0, 300),
@@ -350,7 +470,7 @@ Issue the final recommendation.`;
     synthesis,
     actionPlan,
     citations: loop.citations,
-    memoryUsed: { openTheses: open.length, recentDecisions: decisions.length },
+    memoryUsed,
     latencyMs: Date.now() - started,
   };
 }

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildActionPlan } from "./debate.js";
+import {
+  buildActionPlan,
+  buildDeterministicDebate,
+  evidenceKillReasons,
+} from "./debate.js";
 import type { LivingLoopResult } from "./living-loop.js";
 
 function mockLoop(overrides: Partial<LivingLoopResult> = {}): LivingLoopResult {
@@ -57,4 +61,45 @@ test("buildActionPlan — BLOCK forces wait", () => {
   assert.equal(plan.primaryAction, "wait");
   const policy = plan.steps.find((s) => s.id === "policy");
   assert.match(policy!.detail, /BLOCK/);
+});
+
+test("evidenceKillReasons — on-chain UNAVAILABLE is a hard kill", () => {
+  const reasons = evidenceKillReasons(
+    mockLoop({
+      citations: [
+        { source: "etf", endpoint: "/etfs", at: "t", status: "LIVE" },
+        { source: "ssi_token", endpoint: "dexscreener", at: "t", status: "UNAVAILABLE" },
+      ],
+      drift: { action: "UNAVAILABLE", alert: false } as LivingLoopResult["drift"],
+      proposal: {
+        title: "Hold MAG7",
+        onChainToken: { priceUsd: null, change24hPct: null },
+      },
+    }),
+  );
+  assert.ok(reasons.some((r) => /on-chain|drift/i.test(r)));
+});
+
+test("deterministic debate — WAIT never APPROVE on kill evidence", () => {
+  const loop = mockLoop({
+    citations: [
+      { source: "ssi_token", endpoint: "dexscreener", at: "t", status: "UNAVAILABLE" },
+    ],
+    drift: { action: "UNAVAILABLE", alert: false } as LivingLoopResult["drift"],
+    proposal: {
+      title: "Hold MAG7; confirm liquidity",
+      onChainToken: { priceUsd: null, change24hPct: null },
+    },
+    preflight: { verdict: "CAUTION", factors: [] },
+  });
+  const debate = buildDeterministicDebate(
+    loop,
+    { openTheses: 0, recentDecisions: 0 },
+    { maxNotionalUsd: 1 },
+    Date.now(),
+  );
+  assert.equal(debate.synthesis.stance, "wait");
+  assert.match(debate.counsel.content, /WAIT/i);
+  assert.match(debate.falsifier.content, /INVALIDATE|UNAVAILABLE/i);
+  assert.ok(!/Counsel recommends: APPROVE/i.test(debate.counsel.content));
 });
