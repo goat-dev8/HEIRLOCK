@@ -238,6 +238,7 @@ export function TradingWorkspace({ decisionId }: { decisionId?: string }) {
           network={network}
           cap={cap}
           lastPrice={active?.price}
+          decisionId={decisionId}
         />
       </div>
     </div>
@@ -295,6 +296,7 @@ function OrderTicket({
   network,
   cap,
   lastPrice,
+  decisionId,
 }: {
   symbol?: string;
   symbolID?: number;
@@ -302,6 +304,7 @@ function OrderTicket({
   network: "mainnet" | "testnet";
   cap: number;
   lastPrice?: number | string;
+  decisionId?: string;
 }) {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [price, setPrice] = useState("");
